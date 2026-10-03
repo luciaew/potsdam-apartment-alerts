@@ -276,6 +276,42 @@ if __name__ == "__main__":
     matches = []
 
     for listing in listings:
+        result, reason = filter_listing(listing)
+
+        reasons[reason] = reasons.get(reason, 0) + 1
+
+        if result:
+            matches.append(result)
+
+        if reason == "NO 1-2 ZIMMER":
+            print("ROOM FILTER:", listing["title"])
+
+    print()
+    print("========== FILTER RESULTS ==========")
+
+    for reason, count in reasons.items():
+        print(reason, ":", count)
+
+    print()
+    print("MATCHING LISTINGS:", len(matches))
+    print()
+
+    for result in matches:
+        print("TITLE:", result["title"])
+        print("WARM:", result["warm_rent"], "EUR")
+        print("ANMELDUNG:", result["anmeldung"])
+        print("URL:", result["url"])
+        print()
+
+    listings = get_search_listings()
+
+    print("Listings found:", len(listings))
+    print()
+
+    reasons = {}
+    matches = []
+
+    for listing in listings:
     result, reason = filter_listing(listing)
 
     reasons[reason] = reasons.get(reason, 0) + 1
