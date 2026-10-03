@@ -1,8 +1,9 @@
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 
-URL = "https://www.kleinanzeigen.de/s-wohnung-mieten/potsdam/c203l7958"
+URL = "https://www.kleinanzeigen.de/s-wohnung-mieten/potsdam/wohnung-mieten/k0c203l7958"
 
 HEADERS = {
     "User-Agent": (
@@ -14,44 +15,57 @@ HEADERS = {
 
 
 def get_listings():
-    response = requests.get(URL, headers=HEADERS, timeout=30)
+    response = requests.get(
+        URL,
+        headers=HEADERS,
+        timeout=30
+    )
 
     print("HTTP status:", response.status_code)
+    print("Page size:", len(response.text))
 
     soup = BeautifulSoup(response.text, "html.parser")
 
     listings = []
 
-    for article in soup.select("article.aditem"):
-        title_element = article.select_one("h2")
-        link_element = article.select_one("a[href]")
+    for link in soup.find_all("a", href=True):
 
-        if not title_element or not link_element:
+        href = link["href"]
+
+        if "/s-anzeige/" not in href:
             continue
 
-        title = title_element.get_text(" ", strip=True)
-        link = link_element.get("href")
+        title = link.get_text(" ", strip=True)
 
-        if not link:
+        if not title:
             continue
 
-        if link.startswith("/"):
-            link = "https://www.kleinanzeigen.de" + link
+        full_url = urljoin(
+            "https://www.kleinanzeigen.de",
+            href
+        )
 
         listings.append({
             "title": title,
-            "url": link,
+            "url": full_url
         })
 
-    return listings
+    # Remove duplicates
+    unique = {}
+
+    for listing in listings:
+        unique[listing["url"]] = listing
+
+    return list(unique.values())
 
 
 if __name__ == "__main__":
+
     listings = get_listings()
 
     print("Listings found:", len(listings))
 
-    for listing in listings[:10]:
+    for listing in listings[:20]:
         print()
-        print(listing["title"])
-        print(listing["url"])
+        print("TITLE:", listing["title"])
+        print("URL:", listing["url"])
