@@ -8,13 +8,16 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 
+# =========================================
+# CONFIGURATION
+# =========================================
+
 SEARCH_URL = (
     "https://www.kleinanzeigen.de/"
     "s-wohnung-mieten/potsdam/wohnung-mieten/k0c203l7958"
 )
 
 BASE_URL = "https://www.kleinanzeigen.de"
-
 
 HEADERS = {
     "User-Agent": (
@@ -24,30 +27,29 @@ HEADERS = {
     )
 }
 
-
 MAX_WARM_RENT = 900
 
 GEOCODE_CACHE_FILE = "geocoded.json"
 
 
 # =========================================
-# Potsdam Hauptbahnhof
+# FIXED LOCATIONS
 # =========================================
 
+# Potsdam Hauptbahnhof
 HBF_LAT = 52.391667
 HBF_LON = 13.066667
 
-
-# =========================================
 # FH Potsdam
-# =========================================
-
 FH_LAT = 52.41372
 FH_LON = 13.05141
 
 
-def clean_text(text):
+# =========================================
+# GENERAL
+# =========================================
 
+def clean_text(text):
     return re.sub(
         r"\s+",
         " ",
@@ -139,11 +141,9 @@ def explicit_room_count(text):
             )
 
             try:
-
                 return float(value)
 
             except ValueError:
-
                 pass
 
     return None
@@ -158,8 +158,10 @@ def extract_warm_rent(text):
     patterns = [
         r"warmmiete\s*:?\s*(\d[\d\.\s]*)\s*€",
         r"warmmiete\s*:?\s*€\s*(\d[\d\.\s]*)",
+
         r"gesamtmiete\s*:?\s*(\d[\d\.\s]*)\s*€",
         r"gesamtmiete\s*:?\s*€\s*(\d[\d\.\s]*)",
+
         r"warm\s*:?\s*(\d[\d\.\s]*)\s*€",
         r"warm\s*:?\s*€\s*(\d[\d\.\s]*)",
     ]
@@ -185,11 +187,9 @@ def extract_warm_rent(text):
         )
 
         try:
-
             return float(value)
 
         except ValueError:
-
             continue
 
     return None
@@ -201,19 +201,155 @@ def extract_warm_rent(text):
 
 def extract_available_from(text):
 
+    """
+    Extract only a short availability value.
+
+    Examples:
+
+    Verfügbar ab: sofort
+    Verfügbar ab: 01.11.2026
+    Verfügbar ab November 2026
+    Frei ab: 01.12.2026
+    Bezugsfrei ab: Januar 2027
+    """
+
+    month_names = (
+        "januar|februar|märz|maerz|april|mai|juni|"
+        "juli|august|september|oktober|november|dezember"
+    )
+
+    # -----------------------------------------
+    # Exact date
+    # -----------------------------------------
+
+    exact_date_patterns = [
+
+        r"(?:verfügbar|frei|bezugsfrei)"
+        r"\s+ab\s*:?\s*"
+        r"(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})",
+
+        r"(?:verfügbar|frei|bezugsfrei)"
+        r"\s+ab\s*:?\s*"
+        r"(\d{1,2}\.\s*"
+        + month_names +
+        r"\s+\d{2,4})",
+    ]
+
+    for pattern in exact_date_patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            flags=re.IGNORECASE
+        )
+
+        if match:
+
+            return clean_text(
+                match.group(1)
+            )
+
+
+    # -----------------------------------------
+    # Sofort
+    # -----------------------------------------
+
+    immediate_pattern = (
+        r"(?:verfügbar|frei|bezugsfrei)"
+        r"\s+ab\s*:?\s*"
+        r"(sofort)"
+    )
+
+    match = re.search(
+        immediate_pattern,
+        text,
+        flags=re.IGNORECASE
+    )
+
+    if match:
+
+        return "sofort"
+
+
+    # -----------------------------------------
+    # Month + year
+    # -----------------------------------------
+
+    month_year_pattern = (
+        r"(?:verfügbar|frei|bezugsfrei)"
+        r"\s+ab\s*:?\s*"
+        r"("
+        + month_names +
+        r"(?:\s+\d{4})?"
+        r")"
+    )
+
+    match = re.search(
+        month_year_pattern,
+        text,
+        flags=re.IGNORECASE
+    )
+
+    if match:
+
+        return clean_text(
+            match.group(1)
+        )
+
+
+    # -----------------------------------------
+    # "ab November" in title/description
+    # -----------------------------------------
+
+    simple_month_pattern = (
+        r"\bab\s+("
+        + month_names +
+        r"(?:\s+\d{4})?"
+        r")"
+    )
+
+    match = re.search(
+        simple_month_pattern,
+        text,
+        flags=re.IGNORECASE
+    )
+
+    if match:
+
+        value = clean_text(
+            match.group(1)
+        )
+
+        # Don't use a random "ab [month]" if
+        # it is followed by unrelated wording.
+        if len(value) <= 25:
+
+            return value
+
+
+    return None
+
+
+# =========================================
+# POSTCODE
+# =========================================
+
+def extract_postcode(text):
+
+    """
+    Find a Potsdam postcode.
+
+    Prefer a postcode immediately associated
+    with the word Potsdam.
+    """
+
     patterns = [
 
-        r"verfügbar ab\s*:?\s*([^|]{1,40})",
+        r"\b(144\d{2})\s+Potsdam\b",
 
-        r"frei ab\s*:?\s*([^|]{1,40})",
+        r"\bPotsdam\s*[-,]?\s*(144\d{2})\b",
 
-        r"bezugsfrei ab\s*:?\s*([^|]{1,40})",
-
-        r"ab\s+dem\s+"
-        r"(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})",
-
-        r"ab\s+"
-        r"(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})",
+        r"\b(144\d{2})\b",
     ]
 
     for pattern in patterns:
@@ -226,41 +362,7 @@ def extract_available_from(text):
 
         if match:
 
-            value = clean_text(
-                match.group(1)
-            )
-
-            if len(value) <= 40:
-
-                return value
-
-    return None
-
-
-# =========================================
-# POSTCODE
-# =========================================
-
-def extract_postcode(text):
-
-    """
-    Find a Potsdam-style postcode.
-
-    We intentionally restrict this to 144xx,
-    which covers Potsdam postcodes relevant
-    to this search.
-    """
-
-    pattern = r"\b144\d{2}\b"
-
-    matches = re.findall(
-        pattern,
-        text
-    )
-
-    if matches:
-
-        return matches[0]
+            return match.group(1)
 
     return None
 
@@ -274,9 +376,9 @@ def extract_address(
     html=""
 ):
 
-    # -----------------------------------------
+    # =========================================
     # 1. JSON-LD
-    # -----------------------------------------
+    # =========================================
 
     scripts = soup.find_all(
         "script",
@@ -287,10 +389,12 @@ def extract_address(
 
         try:
 
-            data = json.loads(
+            raw = (
                 script.string
                 or script.get_text()
             )
+
+            data = json.loads(raw)
 
             objects = (
                 data
@@ -310,49 +414,53 @@ def extract_address(
                     "address"
                 )
 
-                if isinstance(
+                if not isinstance(
                     address,
                     dict
                 ):
+                    continue
 
-                    street = address.get(
-                        "streetAddress"
+                street = address.get(
+                    "streetAddress"
+                )
+
+                postcode = address.get(
+                    "postalCode"
+                )
+
+                city = address.get(
+                    "addressLocality"
+                )
+
+                if not (
+                    street
+                    and postcode
+                    and city
+                ):
+                    continue
+
+                city_lower = str(
+                    city
+                ).lower()
+
+                if (
+                    "potsdam" in city_lower
+                    or
+                    "brandenburg" in city_lower
+                ):
+
+                    return clean_text(
+                        f"{street}, "
+                        f"{postcode} {city}"
                     )
-
-                    postcode = address.get(
-                        "postalCode"
-                    )
-
-                    city = address.get(
-                        "addressLocality"
-                    )
-
-                    if (
-                        street
-                        and postcode
-                        and city
-                        and (
-                            "potsdam"
-                            in str(city).lower()
-                            or
-                            "brandenburg"
-                            in str(city).lower()
-                        )
-                    ):
-
-                        return clean_text(
-                            f"{street}, "
-                            f"{postcode} {city}"
-                        )
 
         except Exception:
-
             continue
 
 
-    # -----------------------------------------
+    # =========================================
     # 2. HTML itemprop
-    # -----------------------------------------
+    # =========================================
 
     street = soup.find(
         attrs={
@@ -413,9 +521,9 @@ def extract_address(
             )
 
 
-    # -----------------------------------------
-    # 3. Visible page text
-    # -----------------------------------------
+    # =========================================
+    # 3. Visible text
+    # =========================================
 
     page_text = clean_text(
         soup.get_text(
@@ -424,21 +532,52 @@ def extract_address(
         )
     )
 
-    address_pattern = (
-        r"([A-ZÄÖÜ]"
-        r"[A-Za-zÄÖÜäöüß.\-'\s]{2,60}"
-        r"\s+\d+[A-Za-z]?)"
-        r"\s*,?\s*"
-        r"(\d{5})"
-        r"\s+"
-        r"(?:Brandenburg\s*-\s*)?"
-        r"Potsdam"
+
+    # German street-name endings.
+    #
+    # This prevents things such as:
+    # "Anzeige melden Das könnte dich..."
+    # from being interpreted as addresses.
+
+    street_endings = (
+        r"Straße|Str\.|"
+        r"Allee|"
+        r"Weg|"
+        r"Platz|"
+        r"Ufer|"
+        r"Damm|"
+        r"Ring|"
+        r"Gasse|"
+        r"Steig|"
+        r"Promenade|"
+        r"Chaussee|"
+        r"Stieg|"
+        r"Hof|"
+        r"Pfad"
     )
+
+
+    address_pattern = (
+        r"\b("
+        r"[A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\-']*"
+        r"(?:\s+[A-Za-zÄÖÜäöüß.\-']+){0,6}"
+        r"\s+"
+        r"(?:"
+        + street_endings +
+        r")"
+        r"\s+\d+[A-Za-z]?"
+        r")"
+        r"\s*,?\s*"
+        r"(144\d{2})"
+        r"\s+Potsdam\b"
+    )
+
 
     match = re.search(
         address_pattern,
         page_text
     )
+
 
     if match:
 
@@ -454,25 +593,14 @@ def extract_address(
         )
 
 
-    # -----------------------------------------
+    # =========================================
     # 4. Raw HTML
-    # -----------------------------------------
+    # =========================================
 
     if html:
 
-        raw_address_pattern = (
-            r"([A-ZÄÖÜ]"
-            r"[A-Za-zÄÖÜäöüß.\-'\s]{2,60}"
-            r"\s+\d+[A-Za-z]?)"
-            r"(?:,\s*|\s+)"
-            r"(\d{5})"
-            r"\s+"
-            r"(?:Brandenburg\s*-\s*)?"
-            r"Potsdam"
-        )
-
         match = re.search(
-            raw_address_pattern,
+            address_pattern,
             html
         )
 
@@ -489,6 +617,10 @@ def extract_address(
                 f"{postcode} Potsdam"
             )
 
+
+    # =========================================
+    # Nothing found
+    # =========================================
 
     return None
 
@@ -516,6 +648,7 @@ def get_search_listings():
     )
 
     listings = []
+
 
     for link in soup.find_all(
         "a",
@@ -550,6 +683,8 @@ def get_search_listings():
         )
 
 
+    # Remove duplicates
+
     unique = {}
 
     for listing in listings:
@@ -582,12 +717,15 @@ def get_listing_details(url):
 
             return "", None
 
+
         html = response.text
+
 
         soup = BeautifulSoup(
             html,
             "html.parser"
         )
+
 
         text = clean_text(
             soup.get_text(
@@ -596,12 +734,15 @@ def get_listing_details(url):
             )
         )
 
+
         address = extract_address(
             soup,
             html
         )
 
+
         return text, address
+
 
     except requests.RequestException:
 
@@ -659,6 +800,7 @@ def geocode_address(
     if not address:
 
         return None
+
 
     if address in cache:
 
@@ -749,6 +891,8 @@ def geocode_address(
         )
 
 
+        # Respect Nominatim rate limits.
+
         time.sleep(
             1.1
         )
@@ -768,7 +912,7 @@ def geocode_address(
 
 
 # =========================================
-# DISTANCE
+# DISTANCE CALCULATION
 # =========================================
 
 def distance_km(
@@ -888,18 +1032,18 @@ def filter_listing(
     title = listing["title"]
 
 
-    # -----------------------------------------
+    # =========================================
     # WG
-    # -----------------------------------------
+    # =========================================
 
     if is_wg(title):
 
         return None, "WG"
 
 
-    # -----------------------------------------
+    # =========================================
     # TAUSCH / GESUCH
-    # -----------------------------------------
+    # =========================================
 
     if is_exchange_or_wanted(
         title
@@ -908,9 +1052,9 @@ def filter_listing(
         return None, "TAUSCH/GESUCH"
 
 
-    # -----------------------------------------
-    # ROOMS
-    # -----------------------------------------
+    # =========================================
+    # MAXIMUM 2 ROOMS
+    # =========================================
 
     rooms = explicit_room_count(
         title
@@ -928,9 +1072,9 @@ def filter_listing(
         )
 
 
-    # -----------------------------------------
+    # =========================================
     # DETAILS
-    # -----------------------------------------
+    # =========================================
 
     details, address = (
         get_listing_details(
@@ -962,9 +1106,9 @@ def filter_listing(
     )
 
 
-    # -----------------------------------------
+    # =========================================
     # WARM RENT
-    # -----------------------------------------
+    # =========================================
 
     warm_rent = extract_warm_rent(
         combined_text
@@ -982,9 +1126,9 @@ def filter_listing(
         )
 
 
-    # -----------------------------------------
+    # =========================================
     # AVAILABLE FROM
-    # -----------------------------------------
+    # =========================================
 
     available_from = (
         extract_available_from(
@@ -993,9 +1137,9 @@ def filter_listing(
     )
 
 
-    # -----------------------------------------
+    # =========================================
     # ANMELDUNG
-    # -----------------------------------------
+    # =========================================
 
     anmeldung = "UNKNOWN"
 
@@ -1039,18 +1183,18 @@ def filter_listing(
         anmeldung = "YES"
 
 
-    # -----------------------------------------
+    # =========================================
     # POSTCODE
-    # -----------------------------------------
+    # =========================================
 
     postcode = extract_postcode(
         combined_text
     )
 
 
-    # -----------------------------------------
-    # LOCATION TO GEOCODE
-    # -----------------------------------------
+    # =========================================
+    # LOCATION
+    # =========================================
 
     if address:
 
@@ -1074,9 +1218,9 @@ def filter_listing(
         location_type = "NONE"
 
 
-    # -----------------------------------------
+    # =========================================
     # DISTANCES
-    # -----------------------------------------
+    # =========================================
 
     hbf_distance, fh_distance = (
         calculate_distances(
@@ -1085,9 +1229,9 @@ def filter_listing(
     )
 
 
-    # -----------------------------------------
-    # RESULT
-    # -----------------------------------------
+    # =========================================
+    # FINAL RESULT
+    # =========================================
 
     return {
 
