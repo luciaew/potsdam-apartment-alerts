@@ -233,57 +233,50 @@ def get_listing_details(url):
 def filter_listing(listing):
     title = listing["title"]
 
-    # First filter: 1 or 2 rooms only
     if not is_valid_room_count(title):
-        return None
+        return None, "NO 1-2 ZIMMER"
 
-    # Exclude WG / shared rooms
     if is_wg(title):
-        return None
+        return None, "WG"
 
-    # Exclude exchange and wanted ads from title
     if is_exchange_or_wanted(title):
-        return None
+        return None, "TAUSCH/GESUCH"
 
-    # Read the individual listing
     details = get_listing_details(listing["url"])
 
     if not details:
-        return None
+        return None, "NO DETAILS"
 
     combined_text = title + " " + details
 
-    # Check again using full listing text
     if is_wg(combined_text):
-        return None
+        return None, "WG"
 
     if is_exchange_or_wanted(combined_text):
-        return None
+        return None, "TAUSCH/GESUCH"
 
-    # Warm rent
     warm_rent = extract_warm_rent(combined_text)
 
     if warm_rent is None:
-        return None
+        return None, "NO WARMMIETE"
 
     if warm_rent > MAX_WARM_RENT:
-        return None
+        return None, f"WARM > 900 ({warm_rent} EUR)"
 
-    # Anmeldung
     anmeldung = anmeldung_status(combined_text)
 
     if anmeldung == "NO":
-        return None
+        return None, "ANMELDUNG NO"
 
     if REQUIRE_ANMELDUNG and anmeldung != "YES":
-        return None
+        return None, "ANMELDUNG UNKNOWN"
 
     return {
         "title": title,
         "url": listing["url"],
         "warm_rent": warm_rent,
         "anmeldung": anmeldung,
-    }
+    }, "MATCH"
 
 
 if __name__ == "__main__":
@@ -293,14 +286,23 @@ if __name__ == "__main__":
     print("Listings found:", len(listings))
     print()
 
+    reasons = {}
     matches = []
 
     for listing in listings:
-        result = filter_listing(listing)
+        result, reason = filter_listing(listing)
+
+        reasons[reason] = reasons.get(reason, 0) + 1
 
         if result:
             matches.append(result)
 
+    print("========== FILTER RESULTS ==========")
+
+    for reason, count in reasons.items():
+        print(reason, ":", count)
+
+    print()
     print("MATCHING LISTINGS:", len(matches))
     print()
 
