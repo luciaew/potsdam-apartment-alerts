@@ -3,7 +3,7 @@ name: Potsdam Apartment Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/5 * * * *"
 
 jobs:
   run-bot:
