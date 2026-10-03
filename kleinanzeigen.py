@@ -113,7 +113,7 @@ def extract_warm_rent(text):
     ]
 
     for pattern in patterns:
-        match = re.search(text, pattern, flags=re.IGNORECASE)
+        match = re.search(pattern, text, flags=re.IGNORECASE)
 
         if not match:
             continue
