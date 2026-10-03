@@ -15,6 +15,7 @@ SEARCH_URL = (
 
 BASE_URL = "https://www.kleinanzeigen.de"
 
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -23,23 +24,40 @@ HEADERS = {
     )
 }
 
+
 MAX_WARM_RENT = 900
 
 GEOCODE_CACHE_FILE = "geocoded.json"
 
 
+# =========================================
 # Potsdam Hauptbahnhof
+# =========================================
+
 HBF_LAT = 52.391667
 HBF_LON = 13.066667
 
+
+# =========================================
 # FH Potsdam
+# =========================================
+
 FH_LAT = 52.41372
 FH_LON = 13.05141
 
 
 def clean_text(text):
-    return re.sub(r"\s+", " ", text).strip()
 
+    return re.sub(
+        r"\s+",
+        " ",
+        text
+    ).strip()
+
+
+# =========================================
+# WG FILTER
+# =========================================
 
 def is_wg(text):
 
@@ -64,6 +82,10 @@ def is_wg(text):
     )
 
 
+# =========================================
+# TAUSCH / GESUCH FILTER
+# =========================================
+
 def is_exchange_or_wanted(text):
 
     text_lower = text.lower()
@@ -86,6 +108,10 @@ def is_exchange_or_wanted(text):
         for phrase in excluded_phrases
     )
 
+
+# =========================================
+# ROOM COUNT
+# =========================================
 
 def explicit_room_count(text):
 
@@ -113,13 +139,19 @@ def explicit_room_count(text):
             )
 
             try:
+
                 return float(value)
 
             except ValueError:
+
                 pass
 
     return None
 
+
+# =========================================
+# WARM RENT
+# =========================================
 
 def extract_warm_rent(text):
 
@@ -153,13 +185,19 @@ def extract_warm_rent(text):
         )
 
         try:
+
             return float(value)
 
         except ValueError:
+
             continue
 
     return None
 
+
+# =========================================
+# AVAILABLE FROM
+# =========================================
 
 def extract_available_from(text):
 
@@ -192,7 +230,6 @@ def extract_available_from(text):
                 match.group(1)
             )
 
-            # Avoid returning huge unrelated text
             if len(value) <= 40:
 
                 return value
@@ -200,11 +237,46 @@ def extract_available_from(text):
     return None
 
 
-def extract_address(soup, html=""):
+# =========================================
+# POSTCODE
+# =========================================
 
-    # =========================================
-    # 1. JSON-LD structured data
-    # =========================================
+def extract_postcode(text):
+
+    """
+    Find a Potsdam-style postcode.
+
+    We intentionally restrict this to 144xx,
+    which covers Potsdam postcodes relevant
+    to this search.
+    """
+
+    pattern = r"\b144\d{2}\b"
+
+    matches = re.findall(
+        pattern,
+        text
+    )
+
+    if matches:
+
+        return matches[0]
+
+    return None
+
+
+# =========================================
+# ADDRESS
+# =========================================
+
+def extract_address(
+    soup,
+    html=""
+):
+
+    # -----------------------------------------
+    # 1. JSON-LD
+    # -----------------------------------------
 
     scripts = soup.find_all(
         "script",
@@ -274,28 +346,32 @@ def extract_address(soup, html=""):
                         )
 
         except Exception:
+
             continue
 
 
-    # =========================================
+    # -----------------------------------------
     # 2. HTML itemprop
-    # =========================================
+    # -----------------------------------------
 
     street = soup.find(
         attrs={
-            "itemprop": "streetAddress"
+            "itemprop":
+            "streetAddress"
         }
     )
 
     postcode = soup.find(
         attrs={
-            "itemprop": "postalCode"
+            "itemprop":
+            "postalCode"
         }
     )
 
     city = soup.find(
         attrs={
-            "itemprop": "addressLocality"
+            "itemprop":
+            "addressLocality"
         }
     )
 
@@ -337,9 +413,9 @@ def extract_address(soup, html=""):
             )
 
 
-    # =========================================
+    # -----------------------------------------
     # 3. Visible page text
-    # =========================================
+    # -----------------------------------------
 
     page_text = clean_text(
         soup.get_text(
@@ -349,7 +425,8 @@ def extract_address(soup, html=""):
     )
 
     address_pattern = (
-        r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\-'\s]{2,60}"
+        r"([A-ZÄÖÜ]"
+        r"[A-Za-zÄÖÜäöüß.\-'\s]{2,60}"
         r"\s+\d+[A-Za-z]?)"
         r"\s*,?\s*"
         r"(\d{5})"
@@ -377,14 +454,15 @@ def extract_address(soup, html=""):
         )
 
 
-    # =========================================
+    # -----------------------------------------
     # 4. Raw HTML
-    # =========================================
+    # -----------------------------------------
 
     if html:
 
         raw_address_pattern = (
-            r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\-'\s]{2,60}"
+            r"([A-ZÄÖÜ]"
+            r"[A-Za-zÄÖÜäöüß.\-'\s]{2,60}"
             r"\s+\d+[A-Za-z]?)"
             r"(?:,\s*|\s+)"
             r"(\d{5})"
@@ -414,6 +492,10 @@ def extract_address(soup, html=""):
 
     return None
 
+
+# =========================================
+# SEARCH LISTINGS
+# =========================================
 
 def get_search_listings():
 
@@ -482,6 +564,10 @@ def get_search_listings():
     )
 
 
+# =========================================
+# LISTING DETAILS
+# =========================================
+
 def get_listing_details(url):
 
     try:
@@ -522,6 +608,10 @@ def get_listing_details(url):
         return "", None
 
 
+# =========================================
+# GEOCODE CACHE
+# =========================================
+
 def load_geocode_cache():
 
     try:
@@ -539,7 +629,9 @@ def load_geocode_cache():
         return {}
 
 
-def save_geocode_cache(cache):
+def save_geocode_cache(
+    cache
+):
 
     with open(
         GEOCODE_CACHE_FILE,
@@ -555,25 +647,34 @@ def save_geocode_cache(cache):
         )
 
 
+# =========================================
+# GEOCODING
+# =========================================
+
 def geocode_address(
     address,
     cache
 ):
 
     if not address:
+
         return None
 
     if address in cache:
+
         return cache[address]
+
 
     print(
         "Geocoding:",
         address
     )
 
+
     url = (
         "https://nominatim.openstreetmap.org/search"
     )
+
 
     params = {
         "q": address,
@@ -582,12 +683,14 @@ def geocode_address(
         "countrycodes": "de"
     }
 
+
     headers = {
         "User-Agent": (
             "PotsdamApartmentAlerts/1.0 "
             "(GitHub apartment alert bot)"
         )
     }
+
 
     try:
 
@@ -598,6 +701,7 @@ def geocode_address(
             timeout=30
         )
 
+
         if response.status_code != 200:
 
             print(
@@ -607,7 +711,9 @@ def geocode_address(
 
             return None
 
+
         results = response.json()
+
 
         if not results:
 
@@ -619,6 +725,7 @@ def geocode_address(
 
             return None
 
+
         latitude = float(
             results[0]["lat"]
         )
@@ -627,20 +734,28 @@ def geocode_address(
             results[0]["lon"]
         )
 
+
         coordinates = {
             "lat": latitude,
             "lon": longitude
         }
 
+
         cache[address] = coordinates
+
 
         save_geocode_cache(
             cache
         )
 
-        time.sleep(1.1)
+
+        time.sleep(
+            1.1
+        )
+
 
         return coordinates
+
 
     except Exception as error:
 
@@ -652,6 +767,10 @@ def geocode_address(
         return None
 
 
+# =========================================
+# DISTANCE
+# =========================================
+
 def distance_km(
     lat1,
     lon1,
@@ -661,47 +780,80 @@ def distance_km(
 
     radius = 6371.0
 
-    lat1 = math.radians(lat1)
-    lon1 = math.radians(lon1)
 
-    lat2 = math.radians(lat2)
-    lon2 = math.radians(lon2)
+    lat1 = math.radians(
+        lat1
+    )
+
+    lon1 = math.radians(
+        lon1
+    )
+
+    lat2 = math.radians(
+        lat2
+    )
+
+    lon2 = math.radians(
+        lon2
+    )
+
 
     dlat = lat2 - lat1
+
     dlon = lon2 - lon1
+
 
     a = (
         math.sin(dlat / 2) ** 2
-        + math.cos(lat1)
-        * math.cos(lat2)
-        * math.sin(dlon / 2) ** 2
+        +
+        math.cos(lat1)
+        *
+        math.cos(lat2)
+        *
+        math.sin(dlon / 2) ** 2
     )
+
 
     c = 2 * math.atan2(
         math.sqrt(a),
         math.sqrt(1 - a)
     )
 
+
     return radius * c
 
 
-def calculate_distances(address):
+# =========================================
+# CALCULATE DISTANCES
+# =========================================
 
-    if not address:
+def calculate_distances(
+    location
+):
+
+    if not location:
+
         return None, None
+
 
     cache = load_geocode_cache()
 
+
     coordinates = geocode_address(
-        address,
+        location,
         cache
     )
 
+
     if not coordinates:
+
         return None, None
 
+
     lat = coordinates["lat"]
+
     lon = coordinates["lon"]
+
 
     hbf_distance = distance_km(
         lat,
@@ -710,6 +862,7 @@ def calculate_distances(address):
         HBF_LON
     )
 
+
     fh_distance = distance_km(
         lat,
         lon,
@@ -717,42 +870,52 @@ def calculate_distances(address):
         FH_LON
     )
 
+
     return (
         hbf_distance,
         fh_distance
     )
 
 
-def filter_listing(listing):
+# =========================================
+# FILTER LISTING
+# =========================================
+
+def filter_listing(
+    listing
+):
 
     title = listing["title"]
 
 
-    # =========================================
-    # Exclude WG
-    # =========================================
+    # -----------------------------------------
+    # WG
+    # -----------------------------------------
 
     if is_wg(title):
 
         return None, "WG"
 
 
-    # =========================================
-    # Exclude exchange / wanted ads
-    # =========================================
+    # -----------------------------------------
+    # TAUSCH / GESUCH
+    # -----------------------------------------
 
-    if is_exchange_or_wanted(title):
+    if is_exchange_or_wanted(
+        title
+    ):
 
         return None, "TAUSCH/GESUCH"
 
 
-    # =========================================
-    # Maximum 2 rooms if room count is known
-    # =========================================
+    # -----------------------------------------
+    # ROOMS
+    # -----------------------------------------
 
     rooms = explicit_room_count(
         title
     )
+
 
     if (
         rooms is not None
@@ -760,13 +923,14 @@ def filter_listing(listing):
     ):
 
         return None, (
-            f"MORE THAN 2 ROOMS ({rooms})"
+            f"MORE THAN 2 ROOMS "
+            f"({rooms})"
         )
 
 
-    # =========================================
-    # Get listing details
-    # =========================================
+    # -----------------------------------------
+    # DETAILS
+    # -----------------------------------------
 
     details, address = (
         get_listing_details(
@@ -784,6 +948,8 @@ def filter_listing(listing):
             "anmeldung": "UNKNOWN",
             "available_from": None,
             "address": address,
+            "postcode": None,
+            "location_type": "NONE",
             "hbf_distance": None,
             "fh_distance": None
         }, "MATCH - NO DETAILS"
@@ -796,13 +962,14 @@ def filter_listing(listing):
     )
 
 
-    # =========================================
-    # Warm rent
-    # =========================================
+    # -----------------------------------------
+    # WARM RENT
+    # -----------------------------------------
 
     warm_rent = extract_warm_rent(
         combined_text
     )
+
 
     if (
         warm_rent is not None
@@ -815,18 +982,20 @@ def filter_listing(listing):
         )
 
 
-    # =========================================
-    # Available from
-    # =========================================
+    # -----------------------------------------
+    # AVAILABLE FROM
+    # -----------------------------------------
 
-    available_from = extract_available_from(
-        combined_text
+    available_from = (
+        extract_available_from(
+            combined_text
+        )
     )
 
 
-    # =========================================
-    # Anmeldung
-    # =========================================
+    # -----------------------------------------
+    # ANMELDUNG
+    # -----------------------------------------
 
     anmeldung = "UNKNOWN"
 
@@ -870,43 +1039,103 @@ def filter_listing(listing):
         anmeldung = "YES"
 
 
-    # =========================================
-    # Distances
-    # =========================================
+    # -----------------------------------------
+    # POSTCODE
+    # -----------------------------------------
+
+    postcode = extract_postcode(
+        combined_text
+    )
+
+
+    # -----------------------------------------
+    # LOCATION TO GEOCODE
+    # -----------------------------------------
+
+    if address:
+
+        location_for_geocoding = address
+
+        location_type = "EXACT"
+
+    elif postcode:
+
+        location_for_geocoding = (
+            f"{postcode}, "
+            f"Potsdam, Germany"
+        )
+
+        location_type = "PLZ"
+
+    else:
+
+        location_for_geocoding = None
+
+        location_type = "NONE"
+
+
+    # -----------------------------------------
+    # DISTANCES
+    # -----------------------------------------
 
     hbf_distance, fh_distance = (
         calculate_distances(
-            address
+            location_for_geocoding
         )
     )
 
 
+    # -----------------------------------------
+    # RESULT
+    # -----------------------------------------
+
     return {
+
         "title": title,
+
         "url": listing["url"],
+
         "warm_rent": warm_rent,
+
         "anmeldung": anmeldung,
+
         "available_from": available_from,
+
         "address": address,
+
+        "postcode": postcode,
+
+        "location_type": location_type,
+
         "hbf_distance": hbf_distance,
+
         "fh_distance": fh_distance
+
     }, "MATCH"
 
+
+# =========================================
+# LOCAL TEST
+# =========================================
 
 if __name__ == "__main__":
 
     listings = get_search_listings()
+
 
     print(
         "Listings found:",
         len(listings)
     )
 
+
     print()
+
 
     reasons = {}
 
     matches = []
+
 
     for listing in listings:
 
@@ -916,20 +1145,31 @@ if __name__ == "__main__":
             )
         )
 
+
         reasons[reason] = (
-            reasons.get(reason, 0)
+            reasons.get(
+                reason,
+                0
+            )
             + 1
         )
 
+
         if result:
-            matches.append(result)
+
+            matches.append(
+                result
+            )
 
 
     print(
         "========== FILTER RESULTS =========="
     )
 
-    for reason, count in reasons.items():
+
+    for reason, count in (
+        reasons.items()
+    ):
 
         print(
             reason,
@@ -940,10 +1180,12 @@ if __name__ == "__main__":
 
     print()
 
+
     print(
         "MATCHING LISTINGS:",
         len(matches)
     )
+
 
     print()
 
@@ -973,6 +1215,16 @@ if __name__ == "__main__":
         print(
             "ADDRESS:",
             result["address"]
+        )
+
+        print(
+            "POSTCODE:",
+            result["postcode"]
+        )
+
+        print(
+            "LOCATION TYPE:",
+            result["location_type"]
         )
 
         print(
