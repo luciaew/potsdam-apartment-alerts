@@ -418,7 +418,7 @@ def main():
     # ==================================================
 
     reset_marker = (
-        "__wohnung_jetzt_v2_seen_key_reset_done__"
+        "__wohnung_jetzt_v3_seen_key_reset_done__"
     )
 
     if reset_marker not in seen:
@@ -556,7 +556,7 @@ def main():
         url = listing["url"]
 
         seen_key = (
-            f"wohnung-jetzt-v2:{url}"
+            f"wohnung-jetzt-v3:{url}"
         )
 
         if seen_key in seen:
