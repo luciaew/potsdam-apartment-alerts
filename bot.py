@@ -40,25 +40,6 @@ Document
 wohnung_jetzt.py
 
 
-
-Listo. Preparé el wohnung_jetzt.py final.
-
-Descargar wohnung_jetzt.py
-
-Ahora:
-
-Busca más formatos de fecha: ab November, verfügbar ab, Einzugsfertig ab, Einzug, Mietbeginn, fechas 01.11.2026, etc.
-Solo acepta noviembre 2026 o posterior.
-Mantiene la regla de Warmmiete ≤ €900 si está explícitamente indicada.
-Si solo aparece Kaltmiete, no la interpreta como Warmmiete.
-Si no encuentra Warmmiete, mantiene el anuncio.
-Espera 2 segundos entre consultas.
-Si Wohnung-jetzt responde 429, espera 8 segundos y reintenta una vez.
-
-Reemplazá solamente wohnung_jetzt.py en GitHub y ejecutá Run workflow. 
-
-wohnung_jetzt.py
-Code
 pegue ese archivo pero no actualiza
 
 Sí, ahora la captura aclara una cosa importante.
@@ -196,6 +177,56 @@ Code
 wohnung_jetzt.py
 Code
 bot.yml
+Code
+
+Sí, ya encontré el error exacto. No es Telegram ni Wohnung-jetzt. Es un error de sintaxis en bot.py.
+
+GitHub está ejecutando esto en la línea 8:
+
+sacar esto 🏠 NUEVO DEPARTAMENTO EN POTSDAM
+
+Eso quedó pegado dentro del código Python, por eso aparece:
+
+SyntaxError: invalid character '🏠'
+Solución
+
+No borres ni edites una línea a mano. Reemplazá completamente tu bot.py por este archivo limpio:
+
+DESCARGAR bot.py CORREGIDO
+
+El comienzo correcto tiene que ser:
+
+import json
+import os
+import requests
+
+from kleinanzeigen import get_search_listings as get_kleinanzeigen_listings
+from kleinanzeigen import filter_listing as filter_kleinanzeigen
+
+from immoscout import get_search_listings as get_immoscout_listings
+
+from wohnung_jetzt import (
+    get_search_listings as get_wohnung_jetzt_listings,
+    filter_listing as filter_wohnung_jetzt
+)
+
+No tiene que aparecer ningún texto como sacar esto, 🏠 NUEVO... ni instrucciones fuera de las funciones.
+
+En GitHub
+Code
+bot.py
+✏️ Edit
+Ctrl/Cmd + A
+Pegá el contenido del archivo descargado.
+Commit changes
+Andá a Actions
+Run workflow
+
+Después debería volver a arrancar el bot normalmente.
+
+No cambies wohnung_jetzt.py ni bot.yml ahora. El error de esta ejecución está exclusivamente en bot.py. 
+
+bot.py
 Code
 
 bot.py
