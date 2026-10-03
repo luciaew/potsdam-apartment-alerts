@@ -1,51 +1,39 @@
-import os
 import json
+import os
+
 import requests
 
-from kleinanzeigen import (
-    get_search_listings,
-    filter_listing,
-)
+from kleinanzeigen import get_search_listings as get_kleinanzeigen_listings
+from kleinanzeigen import filter_listing as filter_kleinanzeigen
 
+from immoscout import get_search_listings as get_immoscout_listings
 
-TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-
-TELEGRAM_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 SEEN_FILE = "seen.json"
 
+TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+
 
 def load_seen():
-
-    if not os.path.exists(SEEN_FILE):
-        return set()
-
     try:
-
         with open(
             SEEN_FILE,
             "r",
             encoding="utf-8"
         ) as file:
-
-            data = json.load(file)
-
-        return set(data)
+            return set(json.load(file))
 
     except Exception:
-
         return set()
 
 
 def save_seen(seen):
-
     with open(
         SEEN_FILE,
         "w",
         encoding="utf-8"
     ) as file:
-
         json.dump(
             sorted(seen),
             file,
@@ -54,12 +42,16 @@ def save_seen(seen):
         )
 
 
-def send_message(message):
+def send_telegram(message):
+    url = (
+        f"https://api.telegram.org/bot"
+        f"{TELEGRAM_BOT_TOKEN}/sendMessage"
+    )
 
     response = requests.post(
-        f"{TELEGRAM_URL}/sendMessage",
+        url,
         data={
-            "chat_id": CHAT_ID,
+            "chat_id": TELEGRAM_CHAT_ID,
             "text": message,
             "disable_web_page_preview": False,
         },
@@ -67,224 +59,226 @@ def send_message(message):
     )
 
     print(
-        "Telegram:",
+        "Telegram status:",
         response.status_code
     )
 
     if response.status_code != 200:
         print(response.text)
 
-    return response.status_code == 200
+
+def format_distance(value):
+    if value is None:
+        return "nicht verfügbar"
+
+    return f"{value:.1f} km"
 
 
-def format_distance(
-    distance,
-    approximate=False
-):
+def format_immoscout_listing(listing):
+    message = "🏠 NEUE WOHNUNG – ImmoScout24\n\n"
 
-    if distance is None:
-        return "—"
-
-    if approximate:
-        return f"~{distance:.1f} km"
-
-    return f"{distance:.1f} km"
-
-
-def format_listing(listing):
-
-    # =========================================
-    # Warmmiete
-    # =========================================
-
-    warm = listing.get(
-        "warm_rent"
+    message += (
+        f"📌 {listing.get('title', 'Wohnung in Potsdam')}\n"
     )
 
-    if warm is None:
+    warm_rent = listing.get("warm_rent")
 
-        warm_text = (
-            "Warmmiete: nicht angegeben"
+    if warm_rent is not None:
+        message += (
+            f"💶 Warmmiete: {warm_rent:.0f} €\n"
         )
-
     else:
-
-        warm_text = (
-            f"Warmmiete: €{warm:.0f}"
+        message += (
+            "💶 Warmmiete: nicht angegeben\n"
         )
 
+    area = listing.get("area")
 
-    # =========================================
-    # Anmeldung
-    # =========================================
-
-    anmeldung = listing.get(
-        "anmeldung"
-    )
-
-    if anmeldung == "YES":
-
-        anmeldung_text = (
-            "Anmeldung: ✅"
+    if area is not None:
+        message += (
+            f"📐 Wohnfläche: {area:g} m²\n"
         )
-
-    elif anmeldung == "NO":
-
-        anmeldung_text = (
-            "Anmeldung: ❌"
-        )
-
     else:
-
-        anmeldung_text = (
-            "Anmeldung: ⚠️ "
-            "nicht angegeben"
+        message += (
+            "📐 Wohnfläche: nicht angegeben\n"
         )
 
+    rooms = listing.get("rooms")
 
-    # =========================================
-    # Disponible desde
-    # =========================================
+    if rooms is not None:
+        message += (
+            f"🛏️ Zimmer: {rooms:g}\n"
+        )
+    else:
+        message += (
+            "🛏️ Zimmer: nicht angegeben\n"
+        )
 
     available_from = listing.get(
         "available_from"
     )
 
     if available_from:
-
-        available_text = (
+        message += (
             f"📅 Disponible desde: "
-            f"{available_from}"
+            f"{available_from}\n"
         )
-
     else:
-
-        available_text = (
+        message += (
             "📅 Disponible desde: "
-            "no indicado"
+            "no indicado\n"
         )
 
+    address = listing.get("address")
 
-    # =========================================
-    # Dirección / PLZ
-    # =========================================
-
-    address = listing.get(
-        "address"
-    )
-
-    postcode = listing.get(
-        "postcode"
-    )
-
-    location_type = listing.get(
-        "location_type"
-    )
-
-
-    if (
-        address
-        and location_type == "EXACT"
-    ):
-
-        address_text = (
-            f"📍 Adresse:\n"
-            f"{address}"
+    if address:
+        message += (
+            f"📍 {address}\n"
         )
-
-    elif (
-        postcode
-        and location_type == "PLZ"
-    ):
-
-        address_text = (
-            "📍 Adresse: "
-            "nicht veröffentlicht\n"
-            f"📌 PLZ aproximado: "
-            f"{postcode}"
+    elif listing.get("postcode"):
+        message += (
+            f"📍 ~{listing['postcode']} Potsdam\n"
         )
-
     else:
-
-        address_text = (
-            "📍 Adresse: "
-            "nicht veröffentlicht"
+        message += (
+            "📍 Dirección no indicada\n"
         )
 
+    hbf = listing.get("hbf_distance")
+    fh = listing.get("fh_distance")
 
-    # =========================================
-    # Distancias
-    # =========================================
-
-    approximate = (
-        location_type == "PLZ"
+    message += (
+        f"🚉 Potsdam Hbf: "
+        f"{format_distance(hbf)}\n"
     )
 
-    hbf = format_distance(
-        listing.get(
-            "hbf_distance"
-        ),
-        approximate
+    message += (
+        f"🎓 FH Potsdam: "
+        f"{format_distance(fh)}\n"
     )
 
-    fh = format_distance(
-        listing.get(
-            "fh_distance"
-        ),
-        approximate
-    )
+    message += "\n"
 
-
-    # =========================================
-    # Telegram message
-    # =========================================
-
-    return (
-        f"{listing['title']}\n\n"
-
-        f"{warm_text}\n"
-        f"{anmeldung_text}\n"
-        f"{available_text}\n\n"
-
-        f"{address_text}\n\n"
-
-        f"🚉 Potsdam Hbf: {hbf}\n"
-        f"🎓 FH Potsdam: {fh}\n\n"
-
+    message += (
         f"🔗 {listing['url']}"
     )
+
+    return message
+
+
+def format_kleinanzeigen_listing(listing):
+    message = "🏠 NUEVA VIVIENDA – Kleinanzeigen\n\n"
+
+    message += (
+        f"📌 {listing.get('title', 'Wohnung in Potsdam')}\n"
+    )
+
+    warm_rent = listing.get("warm_rent")
+
+    if warm_rent is not None:
+        message += (
+            f"💶 Warmmiete: {warm_rent:.0f} €\n"
+        )
+    else:
+        message += (
+            "💶 Warmmiete: no indicada\n"
+        )
+
+    rooms = listing.get("rooms")
+
+    if rooms is not None:
+        message += (
+            f"🛏️ Zimmer: {rooms:g}\n"
+        )
+
+    available_from = listing.get(
+        "available_from"
+    )
+
+    if available_from:
+        message += (
+            f"📅 Disponible desde: "
+            f"{available_from}\n"
+        )
+
+    address = listing.get("address")
+
+    if address:
+        message += (
+            f"📍 {address}\n"
+        )
+    elif listing.get("postcode"):
+        message += (
+            f"📍 ~{listing['postcode']} Potsdam\n"
+        )
+    else:
+        message += (
+            "📍 Dirección no indicada\n"
+        )
+
+    hbf = listing.get("hbf_distance")
+    fh = listing.get("fh_distance")
+
+    message += (
+        f"🚉 Potsdam Hbf: "
+        f"{format_distance(hbf)}\n"
+    )
+
+    message += (
+        f"🎓 FH Potsdam: "
+        f"{format_distance(fh)}\n"
+    )
+
+    message += "\n"
+
+    message += (
+        f"🔗 {listing['url']}"
+    )
+
+    return message
 
 
 def main():
 
-    print(
-        "Buscando nuevos departamentos..."
-    )
-
-    listings = get_search_listings()
-
-    print(
-        "Listings found:",
-        len(listings)
-    )
+    print("================================")
+    print("POTSDAM APARTMENT BOT")
+    print("================================")
 
     seen = load_seen()
 
-    new_matches = []
+    # ==================================================
+    # KLEINANZEIGEN
+    # ==================================================
 
+    print()
+    print("Checking Kleinanzeigen...")
 
-    for listing in listings:
+    kleinanzeigen_listings = (
+        get_kleinanzeigen_listings()
+    )
+
+    print(
+        "Kleinanzeigen listings:",
+        len(kleinanzeigen_listings)
+    )
+
+    for listing in kleinanzeigen_listings:
 
         url = listing["url"]
 
-        if url in seen:
+        seen_key = (
+            f"kleinanzeigen:{url}"
+        )
+
+        if seen_key in seen:
             continue
 
-        result, reason = filter_listing(
-            listing
+        result, reason = (
+            filter_kleinanzeigen(listing)
         )
 
         print(
+            "Kleinanzeigen:",
             listing["title"],
             "->",
             reason
@@ -292,49 +286,64 @@ def main():
 
         if result:
 
-            new_matches.append(
-                result
+            send_telegram(
+                format_kleinanzeigen_listing(
+                    result
+                )
             )
 
+        seen.add(seen_key)
+
+    # ==================================================
+    # IMMOSCOUT24
+    # ==================================================
 
     print()
+    print("Checking ImmoScout24...")
 
-    print(
-        "NEW MATCHES:",
-        len(new_matches)
+    immoscout_listings = (
+        get_immoscout_listings()
     )
 
+    print(
+        "ImmoScout24 listings:",
+        len(immoscout_listings)
+    )
 
-    successfully_sent = []
+    for listing in immoscout_listings:
 
+        url = listing["url"]
 
-    for listing in new_matches:
-
-        message = format_listing(
-            listing
+        seen_key = (
+            f"immoscout24:{url}"
         )
 
-        success = send_message(
-            message
+        if seen_key in seen:
+            continue
+
+        print(
+            "ImmoScout24:",
+            listing.get("title")
         )
 
-        if success:
-
-            successfully_sent.append(
-                listing["url"]
+        send_telegram(
+            format_immoscout_listing(
+                listing
             )
+        )
 
+        seen.add(seen_key)
 
-    seen.update(
-        successfully_sent
-    )
+    # ==================================================
+    # SAVE
+    # ==================================================
 
-    save_seen(
-        seen
-    )
+    save_seen(seen)
 
+    print()
+    print("Done.")
     print(
-        "Saved seen listings:",
+        "Total seen listings:",
         len(seen)
     )
 
