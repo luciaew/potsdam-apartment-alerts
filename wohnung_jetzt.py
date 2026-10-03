@@ -436,21 +436,9 @@ def get_search_listings():
 
 def filter_listing(listing):
 
-    title = listing.get(
-        "title",
-        ""
-    ).lower()
-
-    description = listing.get(
-        "description",
-        ""
-    ).lower()
-
-    full_text = (
-        title
-        + " "
-        + description
-    )
+    title = listing.get("title", "").lower()
+    description = listing.get("description", "").lower()
+    full_text = title + " " + description
 
     # =====================================================
     # POTSDAM ONLY
@@ -458,30 +446,18 @@ def filter_listing(listing):
 
     potsdam_terms = [
         "potsdam",
-        "14467",
-        "14469",
-        "14471",
-        "14473",
-        "14476",
-        "14478",
-        "14480",
-        "14482"
+        "14467", "14469", "14471", "14473",
+        "14476", "14478", "14480", "14482"
     ]
 
-    if not any(
-        term in full_text
-        for term in potsdam_terms
-    ):
+    if not any(term in full_text for term in potsdam_terms):
         return False
 
     # =====================================================
     # EXCLUDE WG / SHARED ROOMS
     # =====================================================
 
-    if re.search(
-        r"\bwg\b",
-        title
-    ):
+    if re.search(r"\bwg\b", title):
         return False
 
     wg_terms = [
@@ -496,7 +472,6 @@ def filter_listing(listing):
     ]
 
     for term in wg_terms:
-
         if term in title:
             return False
 
@@ -513,65 +488,49 @@ def filter_listing(listing):
     ]
 
     for term in excluded_terms:
-
         if term in title:
             return False
 
     # =====================================================
     # ROOMS
-    #
     # >2 rooms = EXCLUDE
     # 1-2 rooms = KEEP
     # unknown = KEEP
     # =====================================================
 
     room_matches = re.findall(
-        r"(\d+(?:[.,]\d+)?)"
-        r"\s*(?:-|–)?\s*zimmer",
+        r"(\d+(?:[.,]\d+)?)\s*(?:-|–)?\s*zimmer",
         title,
         re.IGNORECASE
     )
 
     for match in room_matches:
-
         try:
-
-            rooms = float(
-                match.replace(
-                    ",",
-                    "."
-                )
-            )
-
+            rooms = float(match.replace(",", "."))
             if rooms > 2:
                 return False
-
         except ValueError:
-
             pass
 
     # =====================================================
     # WARM RENT
     #
-    # unknown = KEEP
-    # <=900 = KEEP
-    # >900 = EXCLUDE
+    # IMPORTANT:
+    # Only reject when Warmmiete is explicitly stated.
+    # Kaltmiete alone must NOT be treated as Warmmiete.
+    # Unknown warm rent = KEEP.
     # =====================================================
 
     warm_patterns = [
-
-        r"warmmiete\s*:?\s*"
-        r"(\d[\d.]*)\s*€?",
-
-        r"\bwarm\s*:?\s*"
-        r"(\d[\d.]*)\s*€",
-
-        r"\bwm\s*:?\s*"
-        r"(\d[\d.]*)\s*€"
+        r"\bwarmmiete\b\s*:?\s*(\d[\d.,]*)\s*€",
+        r"\bwarmmiete\b\s*:?\s*€?\s*(\d[\d.,]*)",
+        r"\bwarm\b\s*:?\s*(\d[\d.,]*)\s*€",
+        r"\bwm\b\s*:?\s*(\d[\d.,]*)\s*€",
     ]
 
-    for pattern in warm_patterns:
+    warm_found = False
 
+    for pattern in warm_patterns:
         matches = re.findall(
             pattern,
             full_text,
@@ -579,59 +538,72 @@ def filter_listing(listing):
         )
 
         for match in matches:
-
             try:
+                raw = match.strip()
 
-                warm = float(
-                    match
-                    .replace(".", "")
-                    .replace(",", ".")
+                # German number formats:
+                # 900 -> 900
+                # 900,00 -> 900
+                # 1.600 -> 1600
+                # 1.600,00 -> 1600
+                if "," in raw:
+                    raw = raw.replace(".", "").replace(",", ".")
+                elif "." in raw:
+                    parts = raw.split(".")
+                    if len(parts) == 2 and len(parts[1]) == 3:
+                        raw = raw.replace(".", "")
+
+                warm = float(raw)
+                warm_found = True
+
+                print(
+                    "Warmmiete detected:",
+                    warm,
+                    "€",
+                    "for",
+                    listing.get("title")
                 )
 
                 if warm > 900:
+                    print(
+                        "Rejected: Warmmiete over 900 €"
+                    )
                     return False
 
             except ValueError:
-
                 pass
+
+    if not warm_found:
+        print(
+            "Warmmiete unknown -> keeping listing"
+        )
 
     # =====================================================
     # EXPLICIT NO ANMELDUNG
-    #
     # Unknown = KEEP
     # =====================================================
 
     anmeldung_no = [
-
         "anmeldung nicht möglich",
         "anmeldung nicht moglich",
-
         "keine anmeldung möglich",
         "keine anmeldung moglich",
-
         "no registration possible"
     ]
 
     for term in anmeldung_no:
-
         if term in full_text:
             return False
 
     # =====================================================
     # AVAILABILITY
     #
-    # IMPORTANT:
-    # First check card text.
-    # If no date is found, open the individual listing.
+    # ONLY NOVEMBER 2026 OR LATER.
+    # If no availability date is found on the card,
+    # check the individual listing.
     # =====================================================
 
-    availability = extract_availability(
-        full_text
-    )
-
-    # -----------------------------------------------------
-    # If card has no date, open the detail page.
-    # -----------------------------------------------------
+    availability = extract_availability(full_text)
 
     if not availability:
 
@@ -645,11 +617,9 @@ def filter_listing(listing):
         )
 
         if not detail_text:
-
             print(
                 "No detail text -> False"
             )
-
             return False
 
         availability = extract_availability(
@@ -657,14 +627,11 @@ def filter_listing(listing):
         )
 
         if not availability:
-
             print(
                 "No availability found -> False"
             )
-
             return False
 
-        # Save it for possible use by bot.py
         listing["availability"] = (
             availability.get("text")
         )
@@ -689,7 +656,6 @@ def filter_listing(listing):
         availability
     )
 
-    # Save readable availability
     listing["availability"] = (
         availability.get("text")
     )
