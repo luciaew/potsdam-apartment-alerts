@@ -418,7 +418,7 @@ def main():
     # ==================================================
 
     reset_marker = (
-        "__wohnung_jetzt_november_reset_done__"
+        "__wohnung_jetzt_detail_november_reset_done__"
     )
 
     if reset_marker not in seen:
