@@ -3,7 +3,10 @@ from bs4 import BeautifulSoup
 import re
 
 
-SEARCH_URL = "https://www.wohnung-jetzt.de/suche/potsdam/mieten/wohnung/"
+SEARCH_URL = (
+    "https://www.wohnung-jetzt.de/"
+    "suche/potsdam/mieten/wohnung/"
+)
 
 
 HEADERS = {
@@ -16,6 +19,7 @@ HEADERS = {
 
 
 def get_search_listings():
+
     print("Checking Wohnung-jetzt...")
 
     try:
@@ -25,59 +29,108 @@ def get_search_listings():
             timeout=30
         )
 
-        print("Wohnung-jetzt status:", response.status_code)
+        print(
+            "Wohnung-jetzt status:",
+            response.status_code
+        )
 
         if response.status_code != 200:
-            print("Wohnung-jetzt could not be accessed.")
+            print(
+                "Wohnung-jetzt could not be accessed."
+            )
             return []
 
     except Exception as e:
-        print("Wohnung-jetzt error:", e)
+
+        print(
+            "Wohnung-jetzt error:",
+            e
+        )
+
         return []
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(
+        response.text,
+        "html.parser"
+    )
 
     listings = []
     seen_urls = set()
 
-    # Wohnung-jetzt currently uses /exposee/ URLs for property listings.
-    for link in soup.find_all("a", href=True):
+    # Wohnung-jetzt uses /exposee/ URLs
+    # for individual property listings.
+    for link in soup.find_all(
+        "a",
+        href=True
+    ):
 
-        href = link.get("href", "").strip()
+        href = link.get(
+            "href",
+            ""
+        ).strip()
 
         if "/exposee/" not in href:
             continue
 
+        # Build absolute URL
         if href.startswith("/"):
-            url = "https://www.wohnung-jetzt.de" + href
+            url = (
+                "https://www.wohnung-jetzt.de"
+                + href
+            )
+
         elif href.startswith("http"):
             url = href
+
         else:
             continue
+
+        # Remove possible URL fragments
+        url = url.split("#")[0]
 
         if url in seen_urls:
             continue
 
         seen_urls.add(url)
 
-        title = link.get_text(" ", strip=True)
+        # Listing title
+        title = link.get_text(
+            " ",
+            strip=True
+        )
 
         if not title:
             title = "Wohnung in Potsdam"
 
-        # The search result card itself contains useful information:
-        # title, postcode, rooms, area and cold rent.
+        # Get the text belonging to the
+        # listing card.
         parent = link.parent
 
         card_text = ""
-        if parent:
-            card_text = parent.get_text(" ", strip=True)
 
-        # Sometimes the useful text is one or more levels higher.
+        if parent:
+            card_text = parent.get_text(
+                " ",
+                strip=True
+            )
+
+        # Sometimes the card is one level higher.
         if len(card_text) < len(title) + 20:
-            grandparent = parent.parent if parent else None
+
+            grandparent = (
+                parent.parent
+                if parent
+                else None
+            )
+
             if grandparent:
-                card_text = grandparent.get_text(" ", strip=True)
+
+                card_text = (
+                    grandparent.get_text(
+                        " ",
+                        strip=True
+                    )
+                )
 
         listings.append({
             "url": url,
@@ -86,20 +139,35 @@ def get_search_listings():
             "source": "Wohnung-jetzt"
         })
 
-    print("Wohnung-jetzt raw listings:", len(listings))
+    print(
+        "Wohnung-jetzt raw listings:",
+        len(listings)
+    )
 
     return listings
 
 
 def filter_listing(listing):
-    text = (
-        listing.get("title", "") + " " +
-        listing.get("description", "")
+
+    title = listing.get(
+        "title",
+        ""
     ).lower()
 
-    # ---------------------------------------------------------
+    description = listing.get(
+        "description",
+        ""
+    ).lower()
+
+    full_text = (
+        title
+        + " "
+        + description
+    )
+
+    # =========================================================
     # POTSDAM ONLY
-    # ---------------------------------------------------------
+    # =========================================================
 
     potsdam_terms = [
         "potsdam",
@@ -113,14 +181,24 @@ def filter_listing(listing):
         "14482"
     ]
 
-    if not any(term in text for term in potsdam_terms):
+    if not any(
+        term in full_text
+        for term in potsdam_terms
+    ):
         return False
 
-    # ---------------------------------------------------------
+    # =========================================================
     # EXCLUDE WG / SHARED ROOMS
-    # ---------------------------------------------------------
+    #
+    # We check the TITLE primarily.
+    # This prevents unrelated WG text elsewhere
+    # on the page from killing a normal apartment.
+    # =========================================================
 
-    if re.search(r"\bwg\b", text):
+    if re.search(
+        r"\bwg\b",
+        title
+    ):
         return False
 
     wg_terms = [
@@ -135,38 +213,56 @@ def filter_listing(listing):
     ]
 
     for term in wg_terms:
-        if term in text:
+
+        if term in title:
             return False
 
-    # ---------------------------------------------------------
+    # =========================================================
     # EXCLUDE WANTED / EXCHANGE LISTINGS
-    # ---------------------------------------------------------
+    # =========================================================
 
     excluded_terms = [
         "tauschangebot",
         "wohnungstausch",
         "tauschwohnung",
-        "gesuch",
         "wohnung gesucht",
         "mietgesuch"
     ]
 
     for term in excluded_terms:
-        if term in text:
+
+        if term in title:
             return False
 
-    # ---------------------------------------------------------
-    # EXCLUDE MORE THAN 2 ROOMS
-    # ---------------------------------------------------------
+    # IMPORTANT:
+    # We do NOT exclude the generic word "gesuch".
+    # It may appear elsewhere on the website/card.
+
+    # =========================================================
+    # ROOMS
+    #
+    # >2 rooms  -> EXCLUDE
+    # 1-2 rooms -> KEEP
+    # unknown    -> KEEP
+    # =========================================================
 
     room_matches = re.findall(
-        r"(\d+(?:[.,]\d+)?)\s*(?:-|–)?\s*zimmer",
-        text
+        r"(\d+(?:[.,]\d+)?)"
+        r"\s*(?:-|–)?\s*zimmer",
+        title,
+        re.IGNORECASE
     )
 
     for match in room_matches:
+
         try:
-            rooms = float(match.replace(",", "."))
+
+            rooms = float(
+                match.replace(
+                    ",",
+                    "."
+                )
+            )
 
             if rooms > 2:
                 return False
@@ -174,29 +270,45 @@ def filter_listing(listing):
         except ValueError:
             pass
 
-    # ---------------------------------------------------------
+    # =========================================================
     # WARM RENT
-    # ---------------------------------------------------------
     #
-    # IMPORTANT:
-    # If Warmmiete is unknown, KEEP the listing.
-    # If Warmmiete is explicitly > €900, exclude it.
+    # Warmmiete unknown -> KEEP
+    # Warmmiete <= 900  -> KEEP
+    # Warmmiete > 900   -> EXCLUDE
     #
+    # Kaltmiete alone does NOT exclude the listing.
+    # =========================================================
 
     warm_patterns = [
-        r"warmmiete\s*:?\s*(\d[\d.]*)\s*€?",
-        r"warm\s*:?\s*(\d[\d.]*)\s*€",
-        r"\bwm\s*:?\s*(\d[\d.]*)\s*€"
+
+        r"warmmiete\s*:?\s*"
+        r"(\d[\d.]*)\s*€?",
+
+        r"\bwarm\s*:?\s*"
+        r"(\d[\d.]*)\s*€",
+
+        r"\bwm\s*:?\s*"
+        r"(\d[\d.]*)\s*€"
     ]
 
     for pattern in warm_patterns:
 
-        matches = re.findall(pattern, text)
+        matches = re.findall(
+            pattern,
+            full_text,
+            re.IGNORECASE
+        )
 
         for match in matches:
 
             try:
-                warm = float(match.replace(".", "").replace(",", "."))
+
+                warm = float(
+                    match
+                    .replace(".", "")
+                    .replace(",", ".")
+                )
 
                 if warm > 900:
                     return False
@@ -204,20 +316,30 @@ def filter_listing(listing):
             except ValueError:
                 pass
 
-    # ---------------------------------------------------------
+    # =========================================================
     # EXPLICIT "NO ANMELDUNG"
-    # ---------------------------------------------------------
+    #
+    # Unknown Anmeldung -> KEEP
+    # =========================================================
 
     anmeldung_no = [
+
         "anmeldung nicht möglich",
         "anmeldung nicht moglich",
+
         "keine anmeldung möglich",
         "keine anmeldung moglich",
+
         "no registration possible"
     ]
 
     for term in anmeldung_no:
-        if term in text:
+
+        if term in full_text:
             return False
+
+    # =========================================================
+    # PASSED ALL FILTERS
+    # =========================================================
 
     return True
