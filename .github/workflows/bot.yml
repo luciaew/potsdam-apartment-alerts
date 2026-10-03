@@ -2,14 +2,23 @@ name: Potsdam Apartment Bot
 
 on:
   workflow_dispatch:
+
   schedule:
     - cron: "*/5 * * * *"
 
+
+permissions:
+  contents: write
+
+
 jobs:
+
   run-bot:
+
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -21,10 +30,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run bot
+      - name: Run apartment bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python bot.py
-      - name: Test Kleinanzeigen
-        run: python kleinanzeigen.py
+
+      - name: Save seen listings
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add seen.json
+
+          git diff --cached --quiet || git commit -m "Update seen apartment listings"
+
+          git push
