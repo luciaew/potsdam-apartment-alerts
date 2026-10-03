@@ -21,10 +21,6 @@ HEADERS = {
 
 MAX_WARM_RENT = 900
 
-# Para esta primera prueba queremos que Anmeldung
-# aparezca explícitamente en el anuncio.
-REQUIRE_ANMELDUNG = True
-
 
 def clean_text(text):
     return re.sub(r"\s+", " ", text).strip()
@@ -56,6 +52,7 @@ def is_valid_room_count(text):
 
     return False
 
+
 def is_wg(text):
     text_lower = text.lower()
 
@@ -65,7 +62,6 @@ def is_wg(text):
         "wohngemeinschaft",
         "mitbewohner gesucht",
         "mitbewohnerin gesucht",
-        "mitbewohner gesucht",
         "zimmer in wg",
         "zimmer frei in wg",
         "zimmer in einer wg",
@@ -96,15 +92,13 @@ def is_exchange_or_wanted(text):
 
 
 def extract_warm_rent(text):
-    """
-    Try to find an explicitly stated Warmmiete.
-    """
-
     patterns = [
         r"warmmiete\s*:?\s*(\d[\d\.\s]*)\s*€",
         r"warmmiete\s*:?\s*€\s*(\d[\d\.\s]*)",
         r"warm\s*:?\s*(\d[\d\.\s]*)\s*€",
         r"warm\s*:?\s*€\s*(\d[\d\.\s]*)",
+        r"gesamtmiete\s*:?\s*(\d[\d\.\s]*)\s*€",
+        r"gesamtmiete\s*:?\s*€\s*(\d[\d\.\s]*)",
     ]
 
     for pattern in patterns:
@@ -171,7 +165,6 @@ def get_search_listings():
     listings = []
 
     for link in soup.find_all("a", href=True):
-
         href = link["href"]
 
         if "/s-anzeige/" not in href:
@@ -210,38 +203,44 @@ def get_listing_details(url):
 
         soup = BeautifulSoup(response.text, "html.parser")
 
-        return clean_text(soup.get_text(" ", strip=True))
+        return clean_text(
+            soup.get_text(" ", strip=True)
+        )
 
     except requests.RequestException:
         return ""
 
 
 def filter_listing(listing):
- title = listing["title"]
+    title = listing["title"]
 
-details = get_listing_details(listing["url"])
+    # Get individual listing page
+    details = get_listing_details(listing["url"])
 
-if not details:
-    return None, "NO DETAILS"
+    if not details:
+        return None, "NO DETAILS"
 
-combined_text = title + " " + details
+    combined_text = title + " " + details
 
-if not is_valid_room_count(combined_text):
-    return None, "NO 1-2 ZIMMER"
-
-if is_wg(title):
-
-    if is_exchange_or_wanted(title):
-        return None, "TAUSCH/GESUCH"
-
-
+    # Exclude WG / shared rooms
+    if is_wg(title):
+        return None, "WG"
 
     if is_wg(combined_text):
         return None, "WG"
 
+    # Exclude exchange / wanted listings
+    if is_exchange_or_wanted(title):
+        return None, "TAUSCH/GESUCH"
+
     if is_exchange_or_wanted(combined_text):
         return None, "TAUSCH/GESUCH"
 
+    # Must be 1 or 2 rooms
+    if not is_valid_room_count(combined_text):
+        return None, "NO 1-2 ZIMMER"
+
+    # Warm rent must be <= 900 EUR
     warm_rent = extract_warm_rent(combined_text)
 
     if warm_rent is None:
@@ -250,13 +249,21 @@ if is_wg(title):
     if warm_rent > MAX_WARM_RENT:
         return None, f"WARM > 900 ({warm_rent} EUR)"
 
+    # Anmeldung
     anmeldung = anmeldung_status(combined_text)
 
+    # Explicitly impossible
     if anmeldung == "NO":
         return None, "ANMELDUNG NO"
 
-    if REQUIRE_ANMELDUNG and anmeldung != "YES":
-        return None, "ANMELDUNG UNKNOWN"
+    # Unknown is allowed for now
+    if anmeldung == "UNKNOWN":
+        return {
+            "title": title,
+            "url": listing["url"],
+            "warm_rent": warm_rent,
+            "anmeldung": "UNKNOWN",
+        }, "MATCH - ANMELDUNG UNKNOWN"
 
     return {
         "title": title,
@@ -284,10 +291,6 @@ if __name__ == "__main__":
         if result:
             matches.append(result)
 
-        if reason == "NO 1-2 ZIMMER":
-            print("ROOM FILTER:", listing["title"])
-
-    print()
     print("========== FILTER RESULTS ==========")
 
     for reason, count in reasons.items():
