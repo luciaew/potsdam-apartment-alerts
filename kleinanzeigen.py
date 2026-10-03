@@ -31,44 +31,30 @@ def clean_text(text):
 
 
 def is_valid_room_count(text):
-    """
-    Accept only 1 or 2 rooms.
-    Allows:
-      1 Zi.
-      1 Zimmer
-      1-Zimmer-Wohnung
-      2 Zi.
-      2 Zimmer
-      2-Zimmer-Wohnung
+    text_lower = text.lower()
 
-    Rejects:
-      1,5 Zi.
-      2,5 Zi.
-      3 Zi.
-    """
+    patterns = [
+        r"(\d+(?:[.,]\d+)?)\s*[-–]?\s*zimmer",
+        r"(\d+(?:[.,]\d+)?)\s*[-–]?\s*zi\.",
+        r"(\d+(?:[.,]\d+)?)\s*[-–]?\s*z\.",
+        r"(\d+(?:[.,]\d+)?)\s*[-–]?\s*zkb",
+    ]
 
-    matches = re.findall(
-        r"(\d+(?:[.,]\d+)?)\s*(?:-|–)?\s*(?:Zimmer|Zi\.?)",
-        text,
-        flags=re.IGNORECASE,
-    )
+    for pattern in patterns:
+        matches = re.findall(pattern, text_lower)
 
-    if not matches:
-        return False
+        for value in matches:
+            value = value.replace(",", ".")
 
-    for value in matches:
-        value = value.replace(",", ".")
+            try:
+                rooms = float(value)
+            except ValueError:
+                continue
 
-        try:
-            rooms = float(value)
-        except ValueError:
-            continue
-
-        if rooms in (1.0, 2.0):
-            return True
+            if rooms in (1.0, 2.0):
+                return True
 
     return False
-
 
 def is_wg(text):
     text_lower = text.lower()
