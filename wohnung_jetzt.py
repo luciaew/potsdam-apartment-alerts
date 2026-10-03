@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import re
+import time
 
 
 SEARCH_URL = (
@@ -31,6 +32,15 @@ def get_detail_text(url):
             headers=HEADERS,
             timeout=30
         )
+
+        if response.status_code == 429:
+            print("Detail page returned 429 -> waiting and retrying once...")
+            time.sleep(8)
+            response = requests.get(
+                url,
+                headers=HEADERS,
+                timeout=30
+            )
 
         print(
             "Detail status:",
@@ -70,91 +80,59 @@ def extract_availability(text):
     if not text:
         return None
 
-    # -----------------------------------------------------
-    # Explicitly unavailable immediately
-    # -----------------------------------------------------
+    text = re.sub(r"\s+", " ", text.lower()).strip()
 
+    # Clearly immediate availability is NOT November or later.
     if re.search(
-        r"\b(?:ab\s+sofort|sofort\s+frei|sofort\s+verfügbar)\b",
+        r"\b(?:ab\s+sofort|sofort\s+frei|sofort\s+verfügbar|"
+        r"sofort\s+bezugsfertig|einzug\s+sofort)\b",
         text,
         re.IGNORECASE
     ):
         return None
 
-    # -----------------------------------------------------
-    # Month names
-    # -----------------------------------------------------
-
     months = {
-        "januar": 1,
-        "jan": 1,
-
-        "februar": 2,
-        "feb": 2,
-
-        "märz": 3,
-        "maerz": 3,
-        "mär": 3,
-
+        "januar": 1, "jan": 1,
+        "februar": 2, "feb": 2,
+        "märz": 3, "maerz": 3, "mär": 3,
         "april": 4,
-
         "mai": 5,
-
-        "juni": 6,
-        "jun": 6,
-
-        "juli": 7,
-        "jul": 7,
-
-        "august": 8,
-        "aug": 8,
-
-        "september": 9,
-        "sep": 9,
-
-        "oktober": 10,
-        "okt": 10,
-
-        "november": 11,
-        "nov": 11,
-
-        "dezember": 12,
-        "dez": 12
+        "juni": 6, "jun": 6,
+        "juli": 7, "jul": 7,
+        "august": 8, "aug": 8,
+        "september": 9, "sep": 9,
+        "oktober": 10, "okt": 10,
+        "november": 11, "nov": 11,
+        "dezember": 12, "dez": 12
     }
 
     month_names = (
-        "januar|jan|"
-        "februar|feb|"
-        "märz|maerz|mär|"
-        "april|"
-        "mai|"
-        "juni|jun|"
-        "juli|jul|"
-        "august|aug|"
-        "september|sep|"
-        "oktober|okt|"
-        "november|nov|"
-        "dezember|dez"
+        "januar|jan|februar|feb|märz|maerz|mär|april|mai|"
+        "juni|jun|juli|jul|august|aug|september|sep|"
+        "oktober|okt|november|nov|dezember|dez"
     )
 
-    # -----------------------------------------------------
-    # "frei ab November 2026"
-    # "verfügbar ab November 2026"
-    # "Bezugsfrei ab November 2026"
-    # "Bezug ab November 2026"
-    # -----------------------------------------------------
-
+    # Explicit phrases such as:
+    # frei ab November 2026
+    # verfügbar ab November
+    # einzugsfertig ab November
+    # Einzug ab November
+    # Mietbeginn November 2026
     month_pattern = re.compile(
         r"(?:"
         r"frei\s+ab|"
         r"verfügbar\s+ab|"
+        r"verfuegbar\s+ab|"
         r"bezugsfrei\s+ab|"
         r"bezug\s+ab|"
-        r"mietbeginn\s+ab|"
+        r"mietbeginn\s+(?:ab\s+)?|"
+        r"einzugsfertig\s+ab|"
+        r"einzug\s+ab|"
+        r"einzugsbereit\s+ab|"
+        r"bezugsfertig\s+ab|"
         r"ab"
         r")"
-        r"\s+"
-        r"("
+        r"\s*("
         + month_names +
         r")"
         r"(?:\s+(\d{4}))?",
@@ -164,27 +142,14 @@ def extract_availability(text):
     match = month_pattern.search(text)
 
     if match:
-
-        month_name = (
-            match.group(1)
-            .lower()
-        )
-
-        month = months.get(
-            month_name
-        )
+        month_name = match.group(1).lower()
+        month = months.get(month_name)
 
         if month is None:
             return None
 
         year_text = match.group(2)
-
-        if year_text:
-            year = int(year_text)
-        else:
-            # Month without year:
-            # assume the current relevant year.
-            year = 2026
+        year = int(year_text) if year_text else 2026
 
         return {
             "month": month,
@@ -192,21 +157,22 @@ def extract_availability(text):
             "text": match.group(0)
         }
 
-    # -----------------------------------------------------
-    # Numeric date
-    #
-    # 01.11.2026
-    # 01/11/2026
-    # 01-11-2026
-    # -----------------------------------------------------
-
+    # Numeric dates:
+    # ab 01.11.2026
+    # verfügbar ab 01/11/2026
+    # frei ab 1-11-2026
     date_pattern = re.compile(
         r"(?:"
         r"frei\s+ab|"
         r"verfügbar\s+ab|"
+        r"verfuegbar\s+ab|"
         r"bezugsfrei\s+ab|"
         r"bezug\s+ab|"
-        r"mietbeginn\s+ab|"
+        r"mietbeginn\s+(?:ab\s+)?|"
+        r"einzugsfertig\s+ab|"
+        r"einzug\s+ab|"
+        r"einzugsbereit\s+ab|"
+        r"bezugsfertig\s+ab|"
         r"ab"
         r")"
         r"\s+"
@@ -218,23 +184,12 @@ def extract_availability(text):
         re.IGNORECASE
     )
 
-    date_match = date_pattern.search(
-        text
-    )
+    date_match = date_pattern.search(text)
 
     if date_match:
-
-        day = int(
-            date_match.group(1)
-        )
-
-        month = int(
-            date_match.group(2)
-        )
-
-        year = int(
-            date_match.group(3)
-        )
+        day = int(date_match.group(1))
+        month = int(date_match.group(2))
+        year = int(date_match.group(3))
 
         if year < 100:
             year += 2000
@@ -244,6 +199,59 @@ def extract_availability(text):
             "month": month,
             "year": year,
             "text": date_match.group(0)
+        }
+
+    # Some listings put the availability date without "ab",
+    # e.g. "Einzugsfertig: November 2026" or "Einzug: 01.11.2026".
+    labelled_month = re.search(
+        r"(?:einzugsfertig|einzugsbereit|bezugsfertig|"
+        r"einzug|mietbeginn|verfügbar|verfuegbar|"
+        r"bezugsfrei|bezugsdatum|verfügbarkeit|verfuegbarkeit)"
+        r"\s*[:\-]?\s*("
+        + month_names +
+        r")"
+        r"(?:\s+(\d{4}))?",
+        text,
+        re.IGNORECASE
+    )
+
+    if labelled_month:
+        month_name = labelled_month.group(1).lower()
+        month = months.get(month_name)
+
+        if month is not None:
+            year_text = labelled_month.group(2)
+            year = int(year_text) if year_text else 2026
+
+            return {
+                "month": month,
+                "year": year,
+                "text": labelled_month.group(0)
+            }
+
+    labelled_date = re.search(
+        r"(?:einzugsfertig|einzugsbereit|bezugsfertig|"
+        r"einzug|mietbeginn|verfügbar|verfuegbar|"
+        r"bezugsfrei|bezugsdatum|verfügbarkeit|verfuegbarkeit)"
+        r"\s*[:\-]?\s*"
+        r"(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})",
+        text,
+        re.IGNORECASE
+    )
+
+    if labelled_date:
+        day = int(labelled_date.group(1))
+        month = int(labelled_date.group(2))
+        year = int(labelled_date.group(3))
+
+        if year < 100:
+            year += 2000
+
+        return {
+            "day": day,
+            "month": month,
+            "year": year,
+            "text": labelled_date.group(0)
         }
 
     return None
@@ -436,9 +444,21 @@ def get_search_listings():
 
 def filter_listing(listing):
 
-    title = listing.get("title", "").lower()
-    description = listing.get("description", "").lower()
-    full_text = title + " " + description
+    title = listing.get(
+        "title",
+        ""
+    ).lower()
+
+    description = listing.get(
+        "description",
+        ""
+    ).lower()
+
+    full_text = (
+        title
+        + " "
+        + description
+    )
 
     # =====================================================
     # POTSDAM ONLY
@@ -446,18 +466,30 @@ def filter_listing(listing):
 
     potsdam_terms = [
         "potsdam",
-        "14467", "14469", "14471", "14473",
-        "14476", "14478", "14480", "14482"
+        "14467",
+        "14469",
+        "14471",
+        "14473",
+        "14476",
+        "14478",
+        "14480",
+        "14482"
     ]
 
-    if not any(term in full_text for term in potsdam_terms):
+    if not any(
+        term in full_text
+        for term in potsdam_terms
+    ):
         return False
 
     # =====================================================
     # EXCLUDE WG / SHARED ROOMS
     # =====================================================
 
-    if re.search(r"\bwg\b", title):
+    if re.search(
+        r"\bwg\b",
+        title
+    ):
         return False
 
     wg_terms = [
@@ -472,6 +504,7 @@ def filter_listing(listing):
     ]
 
     for term in wg_terms:
+
         if term in title:
             return False
 
@@ -488,49 +521,65 @@ def filter_listing(listing):
     ]
 
     for term in excluded_terms:
+
         if term in title:
             return False
 
     # =====================================================
     # ROOMS
+    #
     # >2 rooms = EXCLUDE
     # 1-2 rooms = KEEP
     # unknown = KEEP
     # =====================================================
 
     room_matches = re.findall(
-        r"(\d+(?:[.,]\d+)?)\s*(?:-|–)?\s*zimmer",
+        r"(\d+(?:[.,]\d+)?)"
+        r"\s*(?:-|–)?\s*zimmer",
         title,
         re.IGNORECASE
     )
 
     for match in room_matches:
+
         try:
-            rooms = float(match.replace(",", "."))
+
+            rooms = float(
+                match.replace(
+                    ",",
+                    "."
+                )
+            )
+
             if rooms > 2:
                 return False
+
         except ValueError:
+
             pass
 
     # =====================================================
     # WARM RENT
     #
-    # IMPORTANT:
-    # Only reject when Warmmiete is explicitly stated.
-    # Kaltmiete alone must NOT be treated as Warmmiete.
-    # Unknown warm rent = KEEP.
+    # unknown = KEEP
+    # <=900 = KEEP
+    # >900 = EXCLUDE
     # =====================================================
 
     warm_patterns = [
-        r"\bwarmmiete\b\s*:?\s*(\d[\d.,]*)\s*€",
-        r"\bwarmmiete\b\s*:?\s*€?\s*(\d[\d.,]*)",
-        r"\bwarm\b\s*:?\s*(\d[\d.,]*)\s*€",
-        r"\bwm\b\s*:?\s*(\d[\d.,]*)\s*€",
+
+        r"warmmiete\s*:?\s*"
+        r"(\d[\d.]*)\s*€?",
+
+        r"\bwarm\s*:?\s*"
+        r"(\d[\d.]*)\s*€",
+
+        r"\bwm\s*:?\s*"
+        r"(\d[\d.]*)\s*€"
     ]
 
-    warm_found = False
-
     for pattern in warm_patterns:
+
         matches = re.findall(
             pattern,
             full_text,
@@ -538,72 +587,59 @@ def filter_listing(listing):
         )
 
         for match in matches:
+
             try:
-                raw = match.strip()
 
-                # German number formats:
-                # 900 -> 900
-                # 900,00 -> 900
-                # 1.600 -> 1600
-                # 1.600,00 -> 1600
-                if "," in raw:
-                    raw = raw.replace(".", "").replace(",", ".")
-                elif "." in raw:
-                    parts = raw.split(".")
-                    if len(parts) == 2 and len(parts[1]) == 3:
-                        raw = raw.replace(".", "")
-
-                warm = float(raw)
-                warm_found = True
-
-                print(
-                    "Warmmiete detected:",
-                    warm,
-                    "€",
-                    "for",
-                    listing.get("title")
+                warm = float(
+                    match
+                    .replace(".", "")
+                    .replace(",", ".")
                 )
 
                 if warm > 900:
-                    print(
-                        "Rejected: Warmmiete over 900 €"
-                    )
                     return False
 
             except ValueError:
-                pass
 
-    if not warm_found:
-        print(
-            "Warmmiete unknown -> keeping listing"
-        )
+                pass
 
     # =====================================================
     # EXPLICIT NO ANMELDUNG
+    #
     # Unknown = KEEP
     # =====================================================
 
     anmeldung_no = [
+
         "anmeldung nicht möglich",
         "anmeldung nicht moglich",
+
         "keine anmeldung möglich",
         "keine anmeldung moglich",
+
         "no registration possible"
     ]
 
     for term in anmeldung_no:
+
         if term in full_text:
             return False
 
     # =====================================================
     # AVAILABILITY
     #
-    # ONLY NOVEMBER 2026 OR LATER.
-    # If no availability date is found on the card,
-    # check the individual listing.
+    # IMPORTANT:
+    # First check card text.
+    # If no date is found, open the individual listing.
     # =====================================================
 
-    availability = extract_availability(full_text)
+    availability = extract_availability(
+        full_text
+    )
+
+    # -----------------------------------------------------
+    # If card has no date, open the detail page.
+    # -----------------------------------------------------
 
     if not availability:
 
@@ -612,14 +648,17 @@ def filter_listing(listing):
             listing.get("title")
         )
 
+        time.sleep(2)
         detail_text = get_detail_text(
             listing["url"]
         )
 
         if not detail_text:
+
             print(
                 "No detail text -> False"
             )
+
             return False
 
         availability = extract_availability(
@@ -627,11 +666,14 @@ def filter_listing(listing):
         )
 
         if not availability:
+
             print(
                 "No availability found -> False"
             )
+
             return False
 
+        # Save it for possible use by bot.py
         listing["availability"] = (
             availability.get("text")
         )
@@ -656,6 +698,7 @@ def filter_listing(listing):
         availability
     )
 
+    # Save readable availability
     listing["availability"] = (
         availability.get("text")
     )
