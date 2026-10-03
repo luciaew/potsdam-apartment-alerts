@@ -5,7 +5,6 @@ de que linea a que linea
 Pasted text(3).txt
 Document
 agregale que diga desde cuando esta disponible
-sacar esto 🏠 NUEVO DEPARTAMENTO EN POTSDAM
 
 proximo paso que sea integrar todas las paginas que te mande ddesd el principio
 Pasted text(4).txt
