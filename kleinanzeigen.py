@@ -131,54 +131,147 @@ def extract_warm_rent(text):
 
 def extract_address(soup):
     """
-    Try to find an exact published address.
+    Find an exact published Potsdam address.
 
-    We only return an address when the page provides
-    structured address information. We do NOT guess an
-    address from a neighborhood.
+    We first try structured data and then fall back
+    to the visible address shown on the Kleinanzeigen page.
     """
 
     # 1. JSON-LD structured data
-    scripts = soup.find_all("script", type="application/ld+json")
+    scripts = soup.find_all(
+        "script",
+        type="application/ld+json"
+    )
 
     for script in scripts:
         try:
-            data = json.loads(script.string or script.get_text())
+            data = json.loads(
+                script.string or script.get_text()
+            )
 
-            objects = data if isinstance(data, list) else [data]
+            objects = (
+                data
+                if isinstance(data, list)
+                else [data]
+            )
 
             for obj in objects:
+
                 if not isinstance(obj, dict):
                     continue
 
                 address = obj.get("address")
 
                 if isinstance(address, dict):
-                    street = address.get("streetAddress")
-                    postcode = address.get("postalCode")
-                    city = address.get("addressLocality")
 
-                    if street and postcode and city:
-                        if "potsdam" in str(city).lower():
-                            return clean_text(
-                                f"{street}, {postcode} {city}"
-                            )
+                    street = address.get(
+                        "streetAddress"
+                    )
+
+                    postcode = address.get(
+                        "postalCode"
+                    )
+
+                    city = address.get(
+                        "addressLocality"
+                    )
+
+                    if (
+                        street
+                        and postcode
+                        and city
+                        and "potsdam"
+                        in str(city).lower()
+                    ):
+                        return clean_text(
+                            f"{street}, "
+                            f"{postcode} {city}"
+                        )
 
         except Exception:
             continue
 
+
     # 2. HTML itemprop fields
-    street = soup.find(attrs={"itemprop": "streetAddress"})
-    postcode = soup.find(attrs={"itemprop": "postalCode"})
-    city = soup.find(attrs={"itemprop": "addressLocality"})
+    street = soup.find(
+        attrs={"itemprop": "streetAddress"}
+    )
+
+    postcode = soup.find(
+        attrs={"itemprop": "postalCode"}
+    )
+
+    city = soup.find(
+        attrs={"itemprop": "addressLocality"}
+    )
 
     if street and postcode and city:
-        street_text = clean_text(street.get_text(" ", strip=True))
-        postcode_text = clean_text(postcode.get_text(" ", strip=True))
-        city_text = clean_text(city.get_text(" ", strip=True))
+
+        street_text = clean_text(
+            street.get_text(
+                " ",
+                strip=True
+            )
+        )
+
+        postcode_text = clean_text(
+            postcode.get_text(
+                " ",
+                strip=True
+            )
+        )
+
+        city_text = clean_text(
+            city.get_text(
+                " ",
+                strip=True
+            )
+        )
 
         if "potsdam" in city_text.lower():
-            return f"{street_text}, {postcode_text} {city_text}"
+
+            return (
+                f"{street_text}, "
+                f"{postcode_text} {city_text}"
+            )
+
+
+    # 3. Visible address on Kleinanzeigen
+    page_text = clean_text(
+        soup.get_text(
+            " ",
+            strip=True
+        )
+    )
+
+    address_pattern = (
+        r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\-'\s]{2,60}"
+        r"\s+\d+[A-Za-z]?)"
+        r"\s*,?\s*"
+        r"(\d{5})"
+        r"\s+"
+        r"(?:Brandenburg\s*-\s*)?"
+        r"Potsdam"
+    )
+
+    match = re.search(
+        address_pattern,
+        page_text
+    )
+
+    if match:
+
+        street = clean_text(
+            match.group(1)
+        )
+
+        postcode = match.group(2)
+
+        return (
+            f"{street}, "
+            f"{postcode} Potsdam"
+        )
+
 
     return None
 
