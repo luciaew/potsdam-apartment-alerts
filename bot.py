@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import requests
 
@@ -70,6 +71,8 @@ def send_telegram(message):
 
     if response.status_code != 200:
         print(response.text)
+
+    return response.status_code == 200
 
 
 def format_distance(value):
@@ -206,6 +209,13 @@ def format_kleinanzeigen_listing(listing):
             f"🛏️ Zimmer: {rooms:g}\n"
         )
 
+    area = listing.get("area")
+
+    if area is not None:
+        message += (
+            f"📐 Wohnfläche: {area:g} m²\n"
+        )
+
     available_from = listing.get(
         "available_from"
     )
@@ -270,11 +280,9 @@ def format_wohnung_jetzt_listing(listing):
         ""
     )
 
-    # ----------------------------------------------
-    # Wohnfläche / m²
-    # ----------------------------------------------
-
-    import re
+    # ------------------------------------------------------
+    # Wohnfläche
+    # ------------------------------------------------------
 
     area_match = re.search(
         r"(\d+(?:[.,]\d+)?)\s*m²",
@@ -283,42 +291,51 @@ def format_wohnung_jetzt_listing(listing):
     )
 
     if area_match:
+
         area = area_match.group(1)
+
         message += (
             f"📐 Wohnfläche: {area} m²\n"
         )
+
     else:
+
         message += (
             "📐 Wohnfläche: nicht angegeben\n"
         )
 
-    # ----------------------------------------------
+    # ------------------------------------------------------
     # Zimmer
-    # ----------------------------------------------
+    # ------------------------------------------------------
 
     room_match = re.search(
-        r"(\d+(?:[.,]\d+)?)\s*(?:-|–)?\s*Zimmer",
+        r"(\d+(?:[.,]\d+)?)"
+        r"\s*(?:-|–)?\s*Zimmer",
         description,
         re.IGNORECASE
     )
 
     if room_match:
+
         rooms = room_match.group(1)
+
         message += (
             f"🛏️ Zimmer: {rooms}\n"
         )
+
     else:
+
         message += (
             "🛏️ Zimmer: nicht angegeben\n"
         )
 
-    # ----------------------------------------------
+    # ------------------------------------------------------
     # Warmmiete
-    # ----------------------------------------------
+    # ------------------------------------------------------
 
     warm_match = re.search(
-        r"(?:Warmmiete|Warm|WM)\s*:?\s*"
-        r"(\d[\d.]*)\s*€",
+        r"(?:Warmmiete|Warm|WM)"
+        r"\s*:?\s*(\d[\d.]*)\s*€",
         description,
         re.IGNORECASE
     )
@@ -337,9 +354,27 @@ def format_wohnung_jetzt_listing(listing):
             "💶 Warmmiete: nicht angegeben\n"
         )
 
-    # ----------------------------------------------
+    # ------------------------------------------------------
+    # Kaltmiete
+    # ------------------------------------------------------
+
+    cold_match = re.search(
+        r"(\d[\d.]*)\s*€\s*kalt",
+        description,
+        re.IGNORECASE
+    )
+
+    if cold_match:
+
+        cold = cold_match.group(1)
+
+        message += (
+            f"💶 Kaltmiete: {cold} €\n"
+        )
+
+    # ------------------------------------------------------
     # Adresse / PLZ
-    # ----------------------------------------------
+    # ------------------------------------------------------
 
     postcode_match = re.search(
         r"\b(144(?:67|69|71|73|76|78|80|82))\b",
@@ -360,16 +395,16 @@ def format_wohnung_jetzt_listing(listing):
             "📍 Dirección no indicada\n"
         )
 
-    # ----------------------------------------------
-    # Distancias
-    # ----------------------------------------------
+    # ------------------------------------------------------
+    # Distances
+    # ------------------------------------------------------
 
     message += (
-        "🚉 Potsdam Hbf: nicht disponible\n"
+        "🚉 Potsdam Hbf: nicht verfügbar\n"
     )
 
     message += (
-        "🎓 FH Potsdam: nicht disponible\n"
+        "🎓 FH Potsdam: nicht verfügbar\n"
     )
 
     message += "\n"
@@ -429,13 +464,14 @@ def main():
 
         if result:
 
-            send_telegram(
+            sent = send_telegram(
                 format_kleinanzeigen_listing(
                     result
                 )
             )
 
-        seen.add(seen_key)
+            if sent:
+                seen.add(seen_key)
 
     # ==================================================
     # IMMOSCOUT24
@@ -469,13 +505,14 @@ def main():
             listing.get("title")
         )
 
-        send_telegram(
+        sent = send_telegram(
             format_immoscout_listing(
                 listing
             )
         )
 
-        seen.add(seen_key)
+        if sent:
+            seen.add(seen_key)
 
     # ==================================================
     # WOHNUNG-JETZT
@@ -501,6 +538,8 @@ def main():
             f"wohnung-jetzt:{url}"
         )
 
+        # Only skip listings that have actually
+        # been sent previously.
         if seen_key in seen:
             continue
 
@@ -515,15 +554,20 @@ def main():
             result
         )
 
-        if result:
+        if not result:
+            continue
 
-            send_telegram(
-                format_wohnung_jetzt_listing(
-                    listing
-                )
+        sent = send_telegram(
+            format_wohnung_jetzt_listing(
+                listing
             )
+        )
 
-        seen.add(seen_key)
+        # IMPORTANT:
+        # Only mark as seen after Telegram
+        # successfully accepted the message.
+        if sent:
+            seen.add(seen_key)
 
     # ==================================================
     # SAVE
