@@ -328,13 +328,24 @@ def get_listing_details(url):
         if response.status_code != 200:
             return "", None
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        html = response.text
 
-        text = clean_text(
-            soup.get_text(" ", strip=True)
+        soup = BeautifulSoup(
+            html,
+            "html.parser"
         )
 
-        address = extract_address(soup)
+        text = clean_text(
+            soup.get_text(
+                " ",
+                strip=True
+            )
+        )
+
+        address = extract_address(
+            soup,
+            html
+        )
 
         return text, address
 
