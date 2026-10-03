@@ -411,24 +411,21 @@ def main():
 
 
     # ==================================================
-    # ONE-TIME RESET
-    # ==================================================
+    # ONE-TIME NOVEMBER RESET
     #
-    # In the first version of Wohnung-jetzt, all listings
-    # were marked as "seen" before the filters were fixed.
-    #
-    # This removes ONLY old Wohnung-jetzt entries.
-    # Kleinanzeigen entries are preserved.
-    #
-    # The marker prevents this reset from happening again.
+    # Re-check old Wohnung-jetzt listings once.
+    # Kleinanzeigen is NOT touched.
     # ==================================================
 
-    reset_marker = "__wohnung_jetzt_reset_done__"
+    reset_marker = (
+        "__wohnung_jetzt_november_reset_done__"
+    )
 
     if reset_marker not in seen:
 
         print(
-            "Resetting old Wohnung-jetzt seen listings..."
+            "Resetting old Wohnung-jetzt listings "
+            "for November filter..."
         )
 
         seen = {
@@ -493,8 +490,6 @@ def main():
 
         else:
 
-            # Listing rejected by filter.
-            # Mark as seen so it is not processed repeatedly.
             seen.add(seen_key)
 
 
@@ -591,8 +586,6 @@ def main():
 
         else:
 
-            # Listing rejected by filter.
-            # Mark as seen so it is not processed repeatedly.
             seen.add(seen_key)
 
 
