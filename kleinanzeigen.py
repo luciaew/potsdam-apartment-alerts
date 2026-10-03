@@ -276,12 +276,15 @@ if __name__ == "__main__":
     matches = []
 
     for listing in listings:
-        result, reason = filter_listing(listing)
+    result, reason = filter_listing(listing)
 
-        reasons[reason] = reasons.get(reason, 0) + 1
+    reasons[reason] = reasons.get(reason, 0) + 1
 
-        if result:
-            matches.append(result)
+    if result:
+        matches.append(result)
+
+    if reason == "NO 1-2 ZIMMER":
+        print("ROOM FILTER:", listing["title"])
 
     print("========== FILTER RESULTS ==========")
 
