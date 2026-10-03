@@ -217,23 +217,24 @@ def get_listing_details(url):
 
 
 def filter_listing(listing):
-    title = listing["title"]
+ title = listing["title"]
 
-    if not is_valid_room_count(title):
-        return None, "NO 1-2 ZIMMER"
+details = get_listing_details(listing["url"])
 
-    if is_wg(title):
-        return None, "WG"
+if not details:
+    return None, "NO DETAILS"
+
+combined_text = title + " " + details
+
+if not is_valid_room_count(combined_text):
+    return None, "NO 1-2 ZIMMER"
+
+if is_wg(title):
 
     if is_exchange_or_wanted(title):
         return None, "TAUSCH/GESUCH"
 
-    details = get_listing_details(listing["url"])
 
-    if not details:
-        return None, "NO DETAILS"
-
-    combined_text = title + " " + details
 
     if is_wg(combined_text):
         return None, "WG"
