@@ -11,53 +11,44 @@ from kleinanzeigen import (
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-TELEGRAM_URL = (
-    f"https://api.telegram.org/bot{TOKEN}"
-)
+TELEGRAM_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 SEEN_FILE = "seen.json"
 
 
 def load_seen():
-
     if not os.path.exists(SEEN_FILE):
         return set()
 
     try:
-
         with open(
             SEEN_FILE,
             "r",
             encoding="utf-8"
         ) as file:
-
             data = json.load(file)
 
         return set(data)
 
     except Exception:
-
         return set()
 
 
 def save_seen(seen):
-
     with open(
         SEEN_FILE,
         "w",
         encoding="utf-8"
     ) as file:
-
         json.dump(
             sorted(seen),
             file,
             ensure_ascii=False,
-            indent=2,
+            indent=2
         )
 
 
 def send_message(message):
-
     response = requests.post(
         f"{TELEGRAM_URL}/sendMessage",
         data={
@@ -80,7 +71,6 @@ def send_message(message):
 
 
 def format_distance(distance):
-
     if distance is None:
         return "—"
 
@@ -89,36 +79,59 @@ def format_distance(distance):
 
 def format_listing(listing):
 
-    warm = listing["warm_rent"]
+    # -----------------------------
+    # Warmmiete
+    # -----------------------------
+
+    warm = listing.get("warm_rent")
 
     if warm is None:
-        warm_text = (
-            "Warmmiete: nicht angegeben"
-        )
+        warm_text = "Warmmiete: nicht angegeben"
     else:
-        warm_text = (
-            f"Warmmiete: €{warm:.0f}"
-        )
+        warm_text = f"Warmmiete: €{warm:.0f}"
 
-    anmeldung = listing["anmeldung"]
+
+    # -----------------------------
+    # Anmeldung
+    # -----------------------------
+
+    anmeldung = listing.get("anmeldung")
 
     if anmeldung == "YES":
-
-        anmeldung_text = (
-            "Anmeldung: ✅"
-        )
+        anmeldung_text = "Anmeldung: ✅"
 
     elif anmeldung == "NO":
-
-        anmeldung_text = (
-            "Anmeldung: ❌"
-        )
+        anmeldung_text = "Anmeldung: ❌"
 
     else:
-
         anmeldung_text = (
             "Anmeldung: ⚠️ nicht angegeben"
         )
+
+
+    # -----------------------------
+    # Disponible desde
+    # -----------------------------
+
+    available_from = listing.get(
+        "available_from"
+    )
+
+    if available_from:
+        available_text = (
+            f"📅 Disponible desde: "
+            f"{available_from}"
+        )
+    else:
+        available_text = (
+            "📅 Disponible desde: "
+            "no indicado"
+        )
+
+
+    # -----------------------------
+    # Dirección
+    # -----------------------------
 
     address = listing.get("address")
 
@@ -131,6 +144,11 @@ def format_listing(listing):
             "📍 Adresse: nicht veröffentlicht"
         )
 
+
+    # -----------------------------
+    # Distancias
+    # -----------------------------
+
     hbf = format_distance(
         listing.get("hbf_distance")
     )
@@ -139,13 +157,17 @@ def format_listing(listing):
         listing.get("fh_distance")
     )
 
-    return (
-        "🏠 NUEVO DEPARTAMENTO EN POTSDAM\n\n"
 
+    # -----------------------------
+    # Telegram message
+    # -----------------------------
+
+    return (
         f"{listing['title']}\n\n"
 
         f"{warm_text}\n"
-        f"{anmeldung_text}\n\n"
+        f"{anmeldung_text}\n"
+        f"{available_text}\n\n"
 
         f"{address_text}\n\n"
 
@@ -193,12 +215,14 @@ def main():
         if result:
             new_matches.append(result)
 
+
     print()
 
     print(
         "NEW MATCHES:",
         len(new_matches)
     )
+
 
     successfully_sent = []
 
@@ -216,6 +240,7 @@ def main():
             successfully_sent.append(
                 listing["url"]
             )
+
 
     seen.update(
         successfully_sent
