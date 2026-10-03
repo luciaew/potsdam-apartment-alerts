@@ -6,21 +6,22 @@ import re
 SEARCH_URL = "https://www.wohnung-jetzt.de/suche/potsdam/mieten/wohnung/"
 
 
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/130.0.0.0 Safari/537.36"
+    )
+}
+
+
 def get_search_listings():
     print("Checking Wohnung-jetzt...")
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/130.0.0.0 Safari/537.36"
-        )
-    }
 
     try:
         response = requests.get(
             SEARCH_URL,
-            headers=headers,
+            headers=HEADERS,
             timeout=30
         )
 
@@ -37,16 +38,14 @@ def get_search_listings():
     soup = BeautifulSoup(response.text, "html.parser")
 
     listings = []
-
-    # Find links that look like apartment detail pages
-    links = soup.find_all("a", href=True)
-
     seen_urls = set()
 
-    for link in links:
+    # Wohnung-jetzt currently uses /exposee/ URLs for property listings.
+    for link in soup.find_all("a", href=True):
+
         href = link.get("href", "").strip()
 
-        if not href:
+        if "/exposee/" not in href:
             continue
 
         if href.startswith("/"):
@@ -56,12 +55,7 @@ def get_search_listings():
         else:
             continue
 
-        # Avoid duplicates
         if url in seen_urls:
-            continue
-
-        # Only apartment/property detail pages
-        if "/immobilien/" not in url and "/angebot/" not in url:
             continue
 
         seen_urls.add(url)
@@ -71,9 +65,24 @@ def get_search_listings():
         if not title:
             title = "Wohnung in Potsdam"
 
+        # The search result card itself contains useful information:
+        # title, postcode, rooms, area and cold rent.
+        parent = link.parent
+
+        card_text = ""
+        if parent:
+            card_text = parent.get_text(" ", strip=True)
+
+        # Sometimes the useful text is one or more levels higher.
+        if len(card_text) < len(title) + 20:
+            grandparent = parent.parent if parent else None
+            if grandparent:
+                card_text = grandparent.get_text(" ", strip=True)
+
         listings.append({
             "url": url,
             "title": title,
+            "description": card_text,
             "source": "Wohnung-jetzt"
         })
 
@@ -88,7 +97,10 @@ def filter_listing(listing):
         listing.get("description", "")
     ).lower()
 
-    # Must be Potsdam
+    # ---------------------------------------------------------
+    # POTSDAM ONLY
+    # ---------------------------------------------------------
+
     potsdam_terms = [
         "potsdam",
         "14467",
@@ -104,9 +116,14 @@ def filter_listing(listing):
     if not any(term in text for term in potsdam_terms):
         return False
 
-    # Exclude WG / shared living
+    # ---------------------------------------------------------
+    # EXCLUDE WG / SHARED ROOMS
+    # ---------------------------------------------------------
+
+    if re.search(r"\bwg\b", text):
+        return False
+
     wg_terms = [
-        "wg",
         "wg-zimmer",
         "wohngemeinschaft",
         "mitbewohner",
@@ -117,19 +134,17 @@ def filter_listing(listing):
         "gemeinschaftszimmer"
     ]
 
-    # Important: don't reject normal "1-zimmer-wohnung"
     for term in wg_terms:
-        if term == "wg":
-            if re.search(r"\bwg\b", text):
-                return False
-        elif term in text:
+        if term in text:
             return False
 
-    # Exclude exchanges / wanted listings
+    # ---------------------------------------------------------
+    # EXCLUDE WANTED / EXCHANGE LISTINGS
+    # ---------------------------------------------------------
+
     excluded_terms = [
         "tauschangebot",
         "wohnungstausch",
-        "wohnungstauschbörse",
         "tauschwohnung",
         "gesuch",
         "wohnung gesucht",
@@ -140,33 +155,69 @@ def filter_listing(listing):
         if term in text:
             return False
 
-    # Exclude explicitly more than 2 rooms
+    # ---------------------------------------------------------
+    # EXCLUDE MORE THAN 2 ROOMS
+    # ---------------------------------------------------------
+
     room_matches = re.findall(
-        r"(\d+(?:[.,]\d+)?)\s*[- ]?\s*zimmer",
+        r"(\d+(?:[.,]\d+)?)\s*(?:-|–)?\s*zimmer",
         text
     )
 
     for match in room_matches:
         try:
             rooms = float(match.replace(",", "."))
+
             if rooms > 2:
                 return False
+
         except ValueError:
             pass
 
-    # Warm rent filter
-    warm_matches = re.findall(
-        r"(?:warmmiete|warmmiete:|warm|wm)\s*[:\-]?\s*"
-        r"(\d{2,5}(?:[.,]\d{1,2})?)\s*€?",
-        text
-    )
+    # ---------------------------------------------------------
+    # WARM RENT
+    # ---------------------------------------------------------
+    #
+    # IMPORTANT:
+    # If Warmmiete is unknown, KEEP the listing.
+    # If Warmmiete is explicitly > €900, exclude it.
+    #
 
-    for match in warm_matches:
-        try:
-            warm = float(match.replace(".", "").replace(",", "."))
-            if warm > 900:
-                return False
-        except ValueError:
-            pass
+    warm_patterns = [
+        r"warmmiete\s*:?\s*(\d[\d.]*)\s*€?",
+        r"warm\s*:?\s*(\d[\d.]*)\s*€",
+        r"\bwm\s*:?\s*(\d[\d.]*)\s*€"
+    ]
+
+    for pattern in warm_patterns:
+
+        matches = re.findall(pattern, text)
+
+        for match in matches:
+
+            try:
+                warm = float(match.replace(".", "").replace(",", "."))
+
+                if warm > 900:
+                    return False
+
+            except ValueError:
+                pass
+
+    # ---------------------------------------------------------
+    # EXPLICIT "NO ANMELDUNG"
+    # ---------------------------------------------------------
+
+    anmeldung_no = [
+        "anmeldung nicht möglich",
+        "anmeldung nicht moglich",
+        "keine anmeldung möglich",
+        "keine anmeldung moglich",
+        "no registration possible"
+    ]
+
+    for term in anmeldung_no:
+        if term in text:
+            return False
 
     return True
