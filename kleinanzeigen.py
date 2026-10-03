@@ -42,6 +42,7 @@ def clean_text(text):
 
 
 def is_wg(text):
+
     text_lower = text.lower()
 
     excluded_phrases = [
@@ -64,6 +65,7 @@ def is_wg(text):
 
 
 def is_exchange_or_wanted(text):
+
     text_lower = text.lower()
 
     excluded_phrases = [
@@ -86,6 +88,7 @@ def is_exchange_or_wanted(text):
 
 
 def explicit_room_count(text):
+
     text_lower = text.lower()
 
     patterns = [
@@ -158,16 +161,50 @@ def extract_warm_rent(text):
     return None
 
 
+def extract_available_from(text):
+
+    patterns = [
+
+        r"verfügbar ab\s*:?\s*([^|]{1,40})",
+
+        r"frei ab\s*:?\s*([^|]{1,40})",
+
+        r"bezugsfrei ab\s*:?\s*([^|]{1,40})",
+
+        r"ab\s+dem\s+"
+        r"(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})",
+
+        r"ab\s+"
+        r"(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})",
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(
+            pattern,
+            text,
+            flags=re.IGNORECASE
+        )
+
+        if match:
+
+            value = clean_text(
+                match.group(1)
+            )
+
+            # Avoid returning huge unrelated text
+            if len(value) <= 40:
+
+                return value
+
+    return None
+
+
 def extract_address(soup, html=""):
-    """
-    Try to find an exact published Potsdam address.
 
-    We never invent an address.
-    """
-
-    # ==================================================
+    # =========================================
     # 1. JSON-LD structured data
-    # ==================================================
+    # =========================================
 
     scripts = soup.find_all(
         "script",
@@ -225,7 +262,8 @@ def extract_address(soup, html=""):
                         and (
                             "potsdam"
                             in str(city).lower()
-                            or "brandenburg"
+                            or
+                            "brandenburg"
                             in str(city).lower()
                         )
                     ):
@@ -239,9 +277,9 @@ def extract_address(soup, html=""):
             continue
 
 
-    # ==================================================
-    # 2. HTML itemprop fields
-    # ==================================================
+    # =========================================
+    # 2. HTML itemprop
+    # =========================================
 
     street = soup.find(
         attrs={
@@ -287,7 +325,8 @@ def extract_address(soup, html=""):
         if (
             "potsdam"
             in city_text.lower()
-            or "brandenburg"
+            or
+            "brandenburg"
             in city_text.lower()
         ):
 
@@ -298,9 +337,9 @@ def extract_address(soup, html=""):
             )
 
 
-    # ==================================================
-    # 3. Visible text on the page
-    # ==================================================
+    # =========================================
+    # 3. Visible page text
+    # =========================================
 
     page_text = clean_text(
         soup.get_text(
@@ -338,9 +377,9 @@ def extract_address(soup, html=""):
         )
 
 
-    # ==================================================
+    # =========================================
     # 4. Raw HTML
-    # ==================================================
+    # =========================================
 
     if html:
 
@@ -381,7 +420,7 @@ def get_search_listings():
     response = requests.get(
         SEARCH_URL,
         headers=HEADERS,
-        timeout=30,
+        timeout=30
     )
 
     print(
@@ -424,7 +463,7 @@ def get_search_listings():
         listings.append(
             {
                 "title": title,
-                "url": full_url,
+                "url": full_url
             }
         )
 
@@ -450,7 +489,7 @@ def get_listing_details(url):
         response = requests.get(
             url,
             headers=HEADERS,
-            timeout=30,
+            timeout=30
         )
 
         if response.status_code != 200:
@@ -540,7 +579,7 @@ def geocode_address(
         "q": address,
         "format": "jsonv2",
         "limit": 1,
-        "countrycodes": "de",
+        "countrycodes": "de"
     }
 
     headers = {
@@ -556,7 +595,7 @@ def geocode_address(
             url,
             params=params,
             headers=headers,
-            timeout=30,
+            timeout=30
         )
 
         if response.status_code != 200:
@@ -590,7 +629,7 @@ def geocode_address(
 
         coordinates = {
             "lat": latitude,
-            "lon": longitude,
+            "lon": longitude
         }
 
         cache[address] = coordinates
@@ -649,7 +688,6 @@ def distance_km(
 def calculate_distances(address):
 
     if not address:
-
         return None, None
 
     cache = load_geocode_cache()
@@ -660,7 +698,6 @@ def calculate_distances(address):
     )
 
     if not coordinates:
-
         return None, None
 
     lat = coordinates["lat"]
@@ -691,19 +728,28 @@ def filter_listing(listing):
     title = listing["title"]
 
 
-    # Exclude exchanges and wanted ads
-    if is_exchange_or_wanted(title):
-
-        return None, "TAUSCH/GESUCH"
-
-
+    # =========================================
     # Exclude WG
+    # =========================================
+
     if is_wg(title):
 
         return None, "WG"
 
 
-    # Exclude explicitly more than 2 rooms
+    # =========================================
+    # Exclude exchange / wanted ads
+    # =========================================
+
+    if is_exchange_or_wanted(title):
+
+        return None, "TAUSCH/GESUCH"
+
+
+    # =========================================
+    # Maximum 2 rooms if room count is known
+    # =========================================
+
     rooms = explicit_room_count(
         title
     )
@@ -718,6 +764,10 @@ def filter_listing(listing):
         )
 
 
+    # =========================================
+    # Get listing details
+    # =========================================
+
     details, address = (
         get_listing_details(
             listing["url"]
@@ -725,8 +775,6 @@ def filter_listing(listing):
     )
 
 
-    # If details cannot be loaded,
-    # keep the listing instead of losing it.
     if not details:
 
         return {
@@ -734,9 +782,10 @@ def filter_listing(listing):
             "url": listing["url"],
             "warm_rent": None,
             "anmeldung": "UNKNOWN",
+            "available_from": None,
             "address": address,
             "hbf_distance": None,
-            "fh_distance": None,
+            "fh_distance": None
         }, "MATCH - NO DETAILS"
 
 
@@ -747,7 +796,10 @@ def filter_listing(listing):
     )
 
 
+    # =========================================
     # Warm rent
+    # =========================================
+
     warm_rent = extract_warm_rent(
         combined_text
     )
@@ -763,7 +815,19 @@ def filter_listing(listing):
         )
 
 
+    # =========================================
+    # Available from
+    # =========================================
+
+    available_from = extract_available_from(
+        combined_text
+    )
+
+
+    # =========================================
     # Anmeldung
+    # =========================================
+
     anmeldung = "UNKNOWN"
 
     text_lower = combined_text.lower()
@@ -772,11 +836,14 @@ def filter_listing(listing):
     if (
         "anmeldung nicht möglich"
         in text_lower
-        or "anmeldung nicht moglich"
+        or
+        "anmeldung nicht moglich"
         in text_lower
-        or "keine anmeldung"
+        or
+        "keine anmeldung"
         in text_lower
-        or "ohne anmeldung"
+        or
+        "ohne anmeldung"
         in text_lower
     ):
 
@@ -786,20 +853,27 @@ def filter_listing(listing):
     elif (
         "anmeldung möglich"
         in text_lower
-        or "anmeldung moglich"
+        or
+        "anmeldung moglich"
         in text_lower
-        or "anmeldung erlaubt"
+        or
+        "anmeldung erlaubt"
         in text_lower
-        or "wohnungsgeberbestätigung"
+        or
+        "wohnungsgeberbestätigung"
         in text_lower
-        or "wohnungsgeberbescheinigung"
+        or
+        "wohnungsgeberbescheinigung"
         in text_lower
     ):
 
         anmeldung = "YES"
 
 
-    # Calculate distances
+    # =========================================
+    # Distances
+    # =========================================
+
     hbf_distance, fh_distance = (
         calculate_distances(
             address
@@ -812,9 +886,10 @@ def filter_listing(listing):
         "url": listing["url"],
         "warm_rent": warm_rent,
         "anmeldung": anmeldung,
+        "available_from": available_from,
         "address": address,
         "hbf_distance": hbf_distance,
-        "fh_distance": fh_distance,
+        "fh_distance": fh_distance
     }, "MATCH"
 
 
@@ -847,20 +922,14 @@ if __name__ == "__main__":
         )
 
         if result:
-
-            matches.append(
-                result
-            )
+            matches.append(result)
 
 
     print(
         "========== FILTER RESULTS =========="
     )
 
-
-    for reason, count in (
-        reasons.items()
-    ):
+    for reason, count in reasons.items():
 
         print(
             reason,
@@ -894,6 +963,11 @@ if __name__ == "__main__":
         print(
             "ANMELDUNG:",
             result["anmeldung"]
+        )
+
+        print(
+            "AVAILABLE FROM:",
+            result["available_from"]
         )
 
         print(
