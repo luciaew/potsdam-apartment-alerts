@@ -1,9 +1,15 @@
+import re
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 
-URL = "https://www.kleinanzeigen.de/s-wohnung-mieten/potsdam/wohnung-mieten/k0c203l7958"
+SEARCH_URL = (
+    "https://www.kleinanzeigen.de/"
+    "s-wohnung-mieten/potsdam/wohnung-mieten/k0c203l7958"
+)
+
+BASE_URL = "https://www.kleinanzeigen.de"
 
 HEADERS = {
     "User-Agent": (
@@ -13,16 +19,166 @@ HEADERS = {
     )
 }
 
+MAX_WARM_RENT = 900
 
-def get_listings():
+# Para esta primera prueba queremos que Anmeldung
+# aparezca explícitamente en el anuncio.
+REQUIRE_ANMELDUNG = True
+
+
+def clean_text(text):
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def is_valid_room_count(text):
+    """
+    Accept only 1 or 2 rooms.
+    Allows:
+      1 Zi.
+      1 Zimmer
+      1-Zimmer-Wohnung
+      2 Zi.
+      2 Zimmer
+      2-Zimmer-Wohnung
+
+    Rejects:
+      1,5 Zi.
+      2,5 Zi.
+      3 Zi.
+    """
+
+    matches = re.findall(
+        r"(\d+(?:[.,]\d+)?)\s*(?:-|–)?\s*(?:Zimmer|Zi\.?)",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+    if not matches:
+        return False
+
+    for value in matches:
+        value = value.replace(",", ".")
+
+        try:
+            rooms = float(value)
+        except ValueError:
+            continue
+
+        if rooms in (1.0, 2.0):
+            return True
+
+    return False
+
+
+def is_wg(text):
+    text_lower = text.lower()
+
+    excluded_phrases = [
+        "wg-zimmer",
+        "wg zimmer",
+        "wohngemeinschaft",
+        "mitbewohner gesucht",
+        "mitbewohnerin gesucht",
+        "mitbewohner gesucht",
+        "zimmer in wg",
+        "zimmer frei in wg",
+        "zimmer in einer wg",
+        "wg gesucht",
+        "wg-wohnung",
+    ]
+
+    return any(phrase in text_lower for phrase in excluded_phrases)
+
+
+def is_exchange_or_wanted(text):
+    text_lower = text.lower()
+
+    excluded_phrases = [
+        "tauschangebot",
+        "tauschwohnung",
+        "wohnungstausch",
+        "wohnungsswap",
+        "swapwohnung",
+        "gesuch",
+        "wohnung gesucht",
+        "suche wohnung",
+        "suche eine wohnung",
+        "nachmieter gesucht",
+    ]
+
+    return any(phrase in text_lower for phrase in excluded_phrases)
+
+
+def extract_warm_rent(text):
+    """
+    Try to find an explicitly stated Warmmiete.
+    """
+
+    patterns = [
+        r"warmmiete\s*:?\s*(\d[\d\.\s]*)\s*€",
+        r"warmmiete\s*:?\s*€\s*(\d[\d\.\s]*)",
+        r"warm\s*:?\s*(\d[\d\.\s]*)\s*€",
+        r"warm\s*:?\s*€\s*(\d[\d\.\s]*)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+
+        if match:
+            value = match.group(1)
+
+            value = (
+                value.replace(".", "")
+                .replace(" ", "")
+                .replace(",", ".")
+            )
+
+            try:
+                return float(value)
+            except ValueError:
+                pass
+
+    return None
+
+
+def anmeldung_status(text):
+    text_lower = text.lower()
+
+    negative = [
+        "anmeldung nicht möglich",
+        "anmeldung nicht moglich",
+        "keine anmeldung",
+        "ohne anmeldung",
+        "keine wohnungsgeberbestätigung",
+        "wohnungsgeberbestätigung nicht möglich",
+        "wohnungsgeberbescheinigung nicht möglich",
+    ]
+
+    positive = [
+        "anmeldung möglich",
+        "anmeldung moglich",
+        "anmeldung erlaubt",
+        "wohnungsgeberbestätigung",
+        "wohnungsgeberbescheinigung",
+    ]
+
+    if any(phrase in text_lower for phrase in negative):
+        return "NO"
+
+    if any(phrase in text_lower for phrase in positive):
+        return "YES"
+
+    return "UNKNOWN"
+
+
+def get_search_listings():
     response = requests.get(
-        URL,
+        SEARCH_URL,
         headers=HEADERS,
-        timeout=30
+        timeout=30,
     )
 
     print("HTTP status:", response.status_code)
-    print("Page size:", len(response.text))
 
     soup = BeautifulSoup(response.text, "html.parser")
 
@@ -35,22 +191,18 @@ def get_listings():
         if "/s-anzeige/" not in href:
             continue
 
-        title = link.get_text(" ", strip=True)
+        title = clean_text(link.get_text(" ", strip=True))
 
         if not title:
             continue
 
-        full_url = urljoin(
-            "https://www.kleinanzeigen.de",
-            href
-        )
+        full_url = urljoin(BASE_URL, href)
 
         listings.append({
             "title": title,
-            "url": full_url
+            "url": full_url,
         })
 
-    # Remove duplicates
     unique = {}
 
     for listing in listings:
@@ -59,13 +211,102 @@ def get_listings():
     return list(unique.values())
 
 
+def get_listing_details(url):
+    try:
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=30,
+        )
+
+        if response.status_code != 200:
+            return ""
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        return clean_text(soup.get_text(" ", strip=True))
+
+    except requests.RequestException:
+        return ""
+
+
+def filter_listing(listing):
+    title = listing["title"]
+
+    # First filter: 1 or 2 rooms only
+    if not is_valid_room_count(title):
+        return None
+
+    # Exclude WG / shared rooms
+    if is_wg(title):
+        return None
+
+    # Exclude exchange and wanted ads from title
+    if is_exchange_or_wanted(title):
+        return None
+
+    # Read the individual listing
+    details = get_listing_details(listing["url"])
+
+    if not details:
+        return None
+
+    combined_text = title + " " + details
+
+    # Check again using full listing text
+    if is_wg(combined_text):
+        return None
+
+    if is_exchange_or_wanted(combined_text):
+        return None
+
+    # Warm rent
+    warm_rent = extract_warm_rent(combined_text)
+
+    if warm_rent is None:
+        return None
+
+    if warm_rent > MAX_WARM_RENT:
+        return None
+
+    # Anmeldung
+    anmeldung = anmeldung_status(combined_text)
+
+    if anmeldung == "NO":
+        return None
+
+    if REQUIRE_ANMELDUNG and anmeldung != "YES":
+        return None
+
+    return {
+        "title": title,
+        "url": listing["url"],
+        "warm_rent": warm_rent,
+        "anmeldung": anmeldung,
+    }
+
+
 if __name__ == "__main__":
 
-    listings = get_listings()
+    listings = get_search_listings()
 
     print("Listings found:", len(listings))
+    print()
 
-    for listing in listings[:20]:
+    matches = []
+
+    for listing in listings:
+        result = filter_listing(listing)
+
+        if result:
+            matches.append(result)
+
+    print("MATCHING LISTINGS:", len(matches))
+    print()
+
+    for result in matches:
+        print("TITLE:", result["title"])
+        print("WARM:", result["warm_rent"], "EUR")
+        print("ANMELDUNG:", result["anmeldung"])
+        print("URL:", result["url"])
         print()
-        print("TITLE:", listing["title"])
-        print("URL:", listing["url"])
