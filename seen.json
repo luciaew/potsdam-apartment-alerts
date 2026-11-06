@@ -7,6 +7,7 @@
   "https://www.kleinanzeigen.de/s-anzeige/1-zimmer-wohnung-vollmoebliert/3530097814-203-7967",
   "https://www.kleinanzeigen.de/s-anzeige/2-zimmer-wohnung-mit-balkon-untermiete-in-potsdam-ab-november/3529203139-203-7967",
   "https://www.kleinanzeigen.de/s-anzeige/moderne-komplett-moeblierte-wohnung-in-potsdam-/3529232069-203-7962",
+  "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/1-5-zimmer-wohnung-in-potsdam-innenstadt-sanierter-altbau/3563248202-203-7962",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/1-5-zimmer-wohnung-teltower-vorstadt-1150-/3562728080-203-7969",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/1-nettokaltmiete-frei-dachgeschosswohnung-im-ruhigen-potsdam-/3160346001-203-7963",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/1-zimmer-in-einer-4-zimmer-wohnung-zweck-wg/3531642541-203-7965",
@@ -92,6 +93,7 @@
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/erstvermietung-3-zim-wohnung-mit-balkon-in-potsdam-drewitz/3504993450-203-7965",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/exclusive-2-room-apartment-with-rooftop-terrace-in-babelsberg/3561449406-203-7964",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/exklusive-2-zimmer-wohnung-mit-dachterrasse-in-babelsberg/3514259377-203-7964",
+  "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/familie-sucht-wegen-arbeit-dringend-wohnung-in-potsdam/3563430967-203-7963",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/finden-sie-etwas-ganz-besonderes-maisonette-wohnung-mit-terrasse-/3561479953-203-7965",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/frisch-sanierte-3-zimmer-wohnung-nahe-sanssouci/3542053470-203-7963",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/gemuetliche-2-zimmer-wohnung-ideal-fuer-junge-paare-obj-10175-erstbezug-nach-neubau/3552787023-203-7962",
@@ -444,6 +446,7 @@
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/ueberzeugen-sie-sich-selbst-und-mieten-sie-von-uns-/3560488514-203-7965",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/untermieter-gesucht/3529005942-203-7968",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/voll-moeblierte-2-zimmer-wohnung-mit-zwei-balkonen-zwischenmiete/3560706463-203-7963",
+  "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/wg-zimmer-in-5-er-wg-fuer-menschen-ueber-30-am-park-sanssouci/3561202055-203-7963",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/wg-zimmer-in-5-er-wg-im-garten-in-potsdam-am-park-sanssouci/3561202055-203-7963",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/wg-zimmer-in-golm-potsdam/3532963943-203-7966",
   "kleinanzeigen:https://www.kleinanzeigen.de/s-anzeige/wg-zimmer-in-perfekt-angebundener-wohnung/3562536188-203-7967",
@@ -862,6 +865,9 @@
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/74817148/",
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/74817152/",
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/74818519/",
+  "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/74835972/",
+  "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/74836962/",
+  "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/74839151/",
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/8934809/74057092//",
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/8934809/74208512//",
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/8934809/74248795//",
@@ -924,5 +930,8 @@
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/9702825/74818519/",
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/9702825/74825996/",
   "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/9702825/74835972/",
-  "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/9702825/74836962/"
+  "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/9702825/74836962/",
+  "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/9702825/74844238/",
+  "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/9702825/74844340/",
+  "wohnung-jetzt-v3:https://www.wohnung-jetzt.de/exposee/9702825/74845231/"
 ]
